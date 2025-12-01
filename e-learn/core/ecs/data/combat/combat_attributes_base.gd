@@ -61,3 +61,6 @@ func serialize() -> Dictionary:
 # 反序列化
 func deserialize(_data: Dictionary):
 	pass
+
+func get_class_name() -> String:
+	return "CombatAttributesBase"

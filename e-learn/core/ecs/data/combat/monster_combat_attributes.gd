@@ -56,16 +56,5 @@ func get_critical_rate() -> float:
 func get_attack_speed() -> float:
 	return base.attack_speed + buff.attack_speed
 
-# 序列化
-func serialize() -> Dictionary:
-	#var data = super.serialize()
-	#data["buff"] = buff.serialize()
-	return base.serialize()
-
-# 反序列化
-func deserialize(data: Dictionary):
-	#super.deserialize(data)
-	#if data.has("buff"):
-		#buff.deserialize(data["buff"])
-		#
-	base.deserialize(data)
+func get_class_name() -> String:
+	return "MonsterCombatAttributes"
