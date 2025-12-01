@@ -1,0 +1,1338 @@
+
+
+==== res:///core/ecs/data/attribute_layer.gd ====
+# res://core/ecs/data/attribute_layer.gd
+class_name AttributeLayer extends Resource
+
+# 基础属性
+@export var health: int = 0
+@export var mana: int = 0
+
+# 攻击属性
+@export var min_attack: int = 0
+@export var max_attack: int = 0
+@export var min_magic_attack: int = 0    # 最小魔法攻击
+@export var max_magic_attack: int = 0    # 最大魔法攻击
+
+# 防御属性
+@export var min_defense: int = 0
+@export var max_defense: int = 0
+@export var min_magic_defense: int = 0
+@export var max_magic_defense: int = 0
+
+# 特殊属性
+@export var accuracy: int = 0      # 准确
+@export var agility: int = 0       # 敏捷
+@export var luck: int = 0          # 幸运
+@export var curse: int = 0         # 诅咒
+
+# 隐藏属性
+@export var magic_dodge: float = 0.0    # 魔法躲避
+@export var critical_rate: float = 0.0  # 暴击率
+@export var attack_speed: float = 1.0   # 攻击速度
+
+# 序列化
+func serialize() -> Dictionary:
+	return {
+		"health": health,
+		"mana": mana,
+		"min_attack": min_attack,
+		"max_attack": max_attack,
+		"min_magic_attack": min_magic_attack,
+		"max_magic_attack": max_magic_attack,
+		
+		"min_defense": min_defense,
+		"max_defense": max_defense,
+		"min_magic_defense": min_magic_defense,
+		"max_magic_defense": max_magic_defense,
+		
+		"accuracy": accuracy,
+		"agility": agility,
+		"luck": luck,
+		"curse": curse,
+		"magic_dodge": magic_dodge,
+		"critical_rate": critical_rate,
+		"attack_speed": attack_speed
+	}
+
+# 反序列化
+func deserialize(data: Dictionary):
+	health = data.get("health", 0)
+	mana = data.get("mana", 0)
+	min_attack = data.get("min_attack", 0)
+	max_attack = data.get("max_attack", 0)
+	min_magic_attack = data.get("min_magic_attack", 0)
+	max_magic_attack = data.get("max_magic_attack", 0)
+	
+	min_defense = data.get("min_defense", 0)
+	max_defense = data.get("max_defense", 0)
+	min_magic_defense = data.get("min_magic_defense", 0)
+	max_magic_defense = data.get("max_magic_defense", 0)
+	
+	accuracy = data.get("accuracy", 0)
+	agility = data.get("agility", 0)
+	luck = data.get("luck", 0)
+	curse = data.get("curse", 0)
+	magic_dodge = data.get("magic_dodge", 0.0)
+	critical_rate = data.get("critical_rate", 0.0)
+	attack_speed = data.get("attack_speed", 1.0)
+
+
+==== res:///core/ecs/data/combat/combat_attributes_base.gd ====
+# res://core/ecs/data/combat/combat_attributes_base.gd
+class_name CombatAttributesBase extends Resource
+
+# 基础属性访问
+func get_health() -> int:
+	return 0
+
+func get_mana() -> int:
+	return 0
+
+func get_min_attack() -> int:
+	return 0
+
+func get_max_attack() -> int:
+	return 0
+
+func get_min_magic_attack() -> int:
+	return 0
+
+func get_max_magic_attack() -> int:
+	return 0
+	
+func get_min_defense() -> int:
+	return 0
+
+func get_max_defense() -> int:
+	return 0
+
+func get_min_magic_defense() -> int:
+	return 0
+	
+func get_max_magic_defense() -> int:
+	return 0
+
+func get_accuracy() -> int:
+	return 0
+
+func get_agility() -> int:
+	return 0
+
+func get_luck() -> int:
+	return 0
+
+func get_curse() -> int:
+	return 0
+
+func get_magic_dodge() -> float:
+	return 0
+
+func get_critical_rate() -> float:
+	return 0
+
+func get_attack_speed() -> float:
+	return 0
+
+# 序列化
+func serialize() -> Dictionary:
+	return {
+	}
+
+# 反序列化
+func deserialize(_data: Dictionary):
+	pass
+
+func get_class_name() -> String:
+	return "CombatAttributesBase"
+
+
+==== res:///core/ecs/data/combat/monster_combat_attributes.gd ====
+# res://core/ecs/data/combat/monster_combat_attributes.gd
+class_name MonsterCombatAttributes extends CombatAttributesBase
+
+@export var base: AttributeLayer = AttributeLayer.new()  # 配表数据
+@export var buff: AttributeLayer = AttributeLayer.new()  # Buff加成
+
+# 重写计算方法（基础 + Buff）
+func get_health() -> int:
+	return base.health + buff.health
+
+func get_mana() -> int:
+	return base.mana + buff.mana
+
+func get_min_attack() -> int:
+	return base.min_attack + buff.min_attack
+
+func get_max_attack() -> int:
+	return base.max_attack + buff.max_attack
+
+func get_min_magic_attack() -> int:
+	return base.min_magic_attack + buff.min_magic_attack
+
+func get_max_magic_attack() -> int:
+	return base.max_magic_attack + buff.max_magic_attack
+	
+func get_min_defense() -> int:
+	return base.min_defense + buff.min_defense
+
+func get_max_defense() -> int:
+	return base.max_defense + buff.max_defense
+
+func get_min_magic_defense() -> int:
+	return base.min_magic_defense + buff.min_magic_defense
+	
+func get_max_magic_defense() -> int:
+	return base.max_magic_defense + buff.max_magic_defense
+	
+func get_accuracy() -> int:
+	return base.accuracy + buff.accuracy
+
+func get_agility() -> int:
+	return base.agility + buff.agility
+
+func get_luck() -> int:
+	return base.luck + buff.luck
+
+func get_curse() -> int:
+	return base.curse + buff.curse
+
+func get_magic_dodge() -> float:
+	return base.magic_dodge + buff.magic_dodge
+
+func get_critical_rate() -> float:
+	return base.critical_rate + buff.critical_rate
+
+func get_attack_speed() -> float:
+	return base.attack_speed + buff.attack_speed
+
+func get_class_name() -> String:
+	return "MonsterCombatAttributes"
+
+
+==== res:///core/ecs/data/combat/npc_combat_attributes.gd ====
+# res://core/ecs/data/combat/npc_combat_attributes.gd
+class_name NPCCombatAttributes extends CombatAttributesBase
+# NPC只需要基础层，不需要重写任何方法
+# 或者如果NPC完全没有战斗属性，可以完全不用这个类
+
+
+==== res:///core/ecs/data/combat/player_combat_attributes.gd ====
+# res://core/ecs/data/combat/player_combat_attributes.gd
+class_name PlayerCombatAttributes extends CombatAttributesBase
+
+@export var job: AttributeLayer = AttributeLayer.new()       # 职业基础数据
+@export var level: AttributeLayer = AttributeLayer.new()     # 等级加成
+@export var equipment: AttributeLayer = AttributeLayer.new() # 装备加成  
+@export var buff: AttributeLayer = AttributeLayer.new()      # Buff加成
+@export var passive: AttributeLayer = AttributeLayer.new()   # 🆕 被动技能加成
+
+# 计算方法（职业基础 + 等级 + 装备 + Buff + 被动技能）
+func get_health() -> int:
+	return job.health + level.health + equipment.health + buff.health + passive.health
+
+func get_mana() -> int:
+	return job.mana + level.mana + equipment.mana + buff.mana + passive.mana
+
+func get_min_attack() -> int:
+	return job.min_attack + level.min_attack + equipment.min_attack + buff.min_attack + passive.min_attack
+
+func get_max_attack() -> int:
+	return job.max_attack + level.max_attack + equipment.max_attack + buff.max_attack + passive.max_attack
+
+func get_min_magic_attack() -> int:
+	return job.min_magic_attack + level.min_magic_attack + equipment.min_magic_attack + buff.min_magic_attack + passive.min_magic_attack
+
+func get_max_magic_attack() -> int:
+	return job.max_magic_attack + level.max_magic_attack + equipment.max_magic_attack + buff.max_magic_attack + passive.max_magic_attack
+	
+func get_min_defense() -> int:
+	return job.min_defense + level.min_defense + equipment.min_defense + buff.min_defense + passive.min_defense
+
+func get_max_defense() -> int:
+	return job.max_defense + level.max_defense + equipment.max_defense + buff.max_defense + passive.max_defense
+
+func get_min_magic_defense() -> int:
+	return job.min_magic_defense + level.min_magic_defense + equipment.min_magic_defense + buff.min_magic_defense + passive.min_magic_defense
+	
+func get_max_magic_defense() -> int:
+	return job.max_magic_defense + level.max_magic_defense + equipment.max_magic_defense + buff.max_magic_defense + passive.max_magic_defense
+	
+func get_accuracy() -> int:
+	return job.accuracy + level.accuracy + equipment.accuracy + buff.accuracy + passive.accuracy
+
+func get_agility() -> int:
+	return job.agility + level.agility + equipment.agility + buff.agility + passive.agility
+
+func get_luck() -> int:
+	return job.luck + level.luck + equipment.luck + buff.luck + passive.luck
+
+func get_curse() -> int:
+	return job.curse + level.curse + equipment.curse + buff.curse + passive.curse
+
+func get_magic_dodge() -> float:
+	return job.magic_dodge + level.magic_dodge + equipment.magic_dodge + buff.magic_dodge + passive.magic_dodge
+
+func get_critical_rate() -> float:
+	return job.critical_rate + level.critical_rate + equipment.critical_rate + buff.critical_rate + passive.critical_rate
+
+func get_attack_speed() -> float:
+	return job.attack_speed + level.attack_speed + equipment.attack_speed + buff.attack_speed + passive.attack_speed
+
+# 序列化
+func serialize() -> Dictionary:
+	return {
+		"job": job.serialize(),
+		"level": level.serialize(),
+		"equipment": equipment.serialize(),
+		"buff": buff.serialize(),
+		"passive": passive.serialize()  # 🆕 序列化被动技能加成
+	}
+
+# 反序列化
+func deserialize(data: Dictionary):
+	if data.has("job"): job.deserialize(data["job"])
+	if data.has("level"): level.deserialize(data["level"])
+	if data.has("equipment"): equipment.deserialize(data["equipment"])
+	if data.has("buff"): buff.deserialize(data["buff"])
+	if data.has("passive"): passive.deserialize(data["passive"])  # 🆕 反序列化被动技能加成
+
+func get_class_name() -> String:
+	return "PlayerCombatAttributes"
+
+
+==== res:///core/ecs/data/config_data.gd ====
+# 低频变化的配置数据（启动时设定，很少变动）
+class_name ConfigData extends Resource
+
+# 基础属性
+var entity_id: String = ""				# 实体唯一ID
+var entity_name: String = ""				# 显示名称（怪物/NPC用）
+var entity_type: String = ""				# player, monster, npc, item
+var prefab_path: String = ""				# 对应的场景文件路径
+
+# 技能和装备配置
+var skills: Array[String] = []
+var equipment_slots: Array[String] = []
+
+# 视觉和表现
+var sprite_path: String = ""
+var collision_shape: String = ""
+var scale: Vector2 = Vector2.ONE
+
+# === 玩家特有配置 ===
+var character_class: String = "warrior" # warrior, mage, taoist
+var gender: String = "male"             # male, female
+
+# === 怪物特有配置 ===
+var ai_behavior: String = "passive"     # passive, aggressive, neutral
+var monster_rank: String = "normal"     # normal, elite, boss, lord
+
+# === 装备槽位配置 ===
+var equip_slots: Array[String] = [
+	"weapon", "helmet", "necklace", "armor", 
+	"bracelet", "ring", "boots"
+]
+
+# 构造函数
+func _init(
+	id: String = "", 
+	name: String = "", 
+	type: String = "player", 
+	char_class: String = "warrior"
+):
+	entity_id = id
+	entity_name = name
+	entity_type = type
+	character_class = char_class
+	
+# === 工具方法 ===
+func get_class_display_name() -> String:
+	match character_class:
+		"warrior": return "战士"
+		"mage": return "法师"
+		"taoist": return "道士"
+		_: return "未知职业"
+		
+# 怪物相关方法
+func is_monster() -> bool:
+	return entity_type == "monster"
+
+func is_player() -> bool:
+	return entity_type == "player"
+
+func is_npc() -> bool:
+	return entity_type == "npc"
+
+# 获取行为模式显示名称
+func get_behavior_display_name() -> String:
+	match ai_behavior:
+		"passive": return "被动"
+		"aggressive": return "主动"
+		"neutral": return "中立"
+		"fleeing": return "逃跑"
+		_: return "未知"
+
+# 获取怪物等级显示名称
+func get_rank_display_name() -> String:
+	match monster_rank:
+		"normal": return "普通"
+		"elite": return "精英"
+		"boss": return "首领"
+		"lord": return "领主"
+		_: return "未知"
+		
+func get_display_name() -> String:
+	return "%s Lv.1 %s" % [entity_name, get_class_display_name()]
+
+func has_skill(skill_id: String) -> bool:
+	return skill_id in skills
+
+func add_skill(skill_id: String) -> void:
+	if not has_skill(skill_id):
+		skills.append(skill_id)
+	
+
+
+==== res:///core/ecs/data/entity_data.gd ====
+# 统一数据管理容器，支持响应式数据变更
+class_name EntityData extends Resource
+
+# 数据组件引用
+var runtime: RuntimeData = null
+var config: ConfigData = null
+
+# === 数据变更信号 ===
+signal data_changed(property_name: String, old_value, new_value)
+signal position_changed(old_pos: Vector2, new_pos: Vector2)
+signal health_changed(old_health: int, new_health: int)
+signal mana_changed(old_mana: int, new_mana: int)
+
+# 构造函数
+func _init(
+	runtime_data: RuntimeData = null, 
+	config_data: ConfigData = null
+):
+	runtime = runtime_data if runtime_data else RuntimeData.new()
+	config = config_data if config_data else ConfigData.new()
+
+# 转发运行时组件变更信号
+func _on_runtime_data_changed(property: String, old_value, new_value):
+	data_changed.emit("runtime", property, old_value, new_value)
+
+# === 基础数据访问 ===
+func set_position(new_position: Vector2) -> void:
+	if runtime.position != new_position:
+		var old_position = runtime.position
+		runtime.position = new_position
+		position_changed.emit(old_position, new_position)
+
+# === 状态检查 ===
+func is_alive() -> bool:
+	return runtime.is_alive()
+	
+func has_state_flag(state_flag: int) -> bool:
+	return runtime.has_state_flag(state_flag)
+
+func set_state_flag(state_flag: int) -> void:
+	var old_flags = runtime.state_flags
+	runtime.set_state_flag(state_flag)
+	if runtime.state_flags != old_flags:
+		data_changed.emit("state_flags", old_flags, runtime.state_flags)
+
+func clear_state_flag(state_flag: int) -> void:
+	var old_flags = runtime.state_flags
+	runtime.clear_state_flag(state_flag)
+	if runtime.state_flags != old_flags:
+		data_changed.emit("state_flags", old_flags, runtime.state_flags)
+
+func get_active_states() -> Array:
+	return runtime.get_active_states()
+
+# === 伤害和治疗 ===
+func take_damage(damage: int) -> void:
+	var old_health = runtime.current_health
+	runtime.take_damage(damage)
+	health_changed.emit(old_health, runtime.current_health)
+
+func heal(amount: int) -> void:
+	var old_health = runtime.current_health
+	runtime.heal(amount)
+	health_changed.emit(old_health, runtime.current_health)
+
+# === 工具方法 ===
+func get_display_name() -> String:
+	# 优先使用运行时昵称，没有则使用配置名称
+	if runtime.nickname != "":
+		return runtime.nickname
+	return config.get_display_name()
+
+func get_character_class() -> String:
+	return config.character_class
+
+# === 战斗属性访问（委托给RuntimeData）===
+func get_position() -> Vector2: return runtime.position
+	
+func get_level() -> int: return runtime.level
+
+func get_experience() -> int: return runtime.experience
+	
+func get_health() -> float: return runtime.get_health()
+
+func get_max_health() -> float: return runtime.get_max_health()
+
+func get_mana() -> float: return runtime.get_mana()
+
+func get_max_mana() -> float: return runtime.get_max_mana()
+
+func get_min_attack() -> int:return runtime.get_min_attack()
+
+func get_max_attack() -> int:return runtime.get_max_attack()
+
+func get_min_magic_attack() -> int:return runtime.get_min_()
+
+func get_max_magic_attack() -> int:return runtime.get_max_magic_attack()
+
+func get_min_defense() -> int:return runtime.get_min_defense()
+
+func get_max_defense() -> int:return runtime.get_max_defense()
+
+func get_min_magic_defense() -> int:return runtime.get_min_magic_defense()
+	
+func get_max_magic_defense() -> int:return runtime.get_max_magic_defense()
+
+func get_accuracy() -> int:return runtime.get_accuracy()
+
+func get_agility() -> int:return runtime.get_agility()
+
+func get_luck() -> int:return runtime.get_luck()
+
+func get_curse() -> int:return runtime.get_curse()
+
+func get_critical_rate() -> float:return runtime.get_critical_rate()
+
+func get_magic_dodge() -> float:return runtime.get_magic_dodge()
+
+func get_attack_speed() -> float:return runtime.get_attack_speed()
+
+# 序列化数据（用于存档）
+func serialize() -> Dictionary:
+	return {
+		"runtime": runtime.serialize(),
+		"config": config.serialize()
+	}
+
+# 反序列化数据
+func deserialize(data: Dictionary):
+	if data.has("runtime"):
+		runtime.deserialize(data["runtime"])
+	if data.has("config"):
+		config.deserialize(data["config"])
+
+
+==== res:///core/ecs/data/runtime_data.gd ====
+# 高频变化的运行时数据
+class_name RuntimeData extends Resource
+
+# 状态标志位定义（使用位运算，支持多个状态同时存在）
+enum StateFlags {
+	IN_BATTLE = 1,       # 战斗中 - 影响自动回血回蓝、某些技能效果
+	POISONED = 2,        # 中毒 - 持续扣血，影响移动速度
+	FROZEN = 4,          # 冰冻 - 无法移动和攻击，防御力提升
+	PARALYZED = 8,       # 麻痹 - 无法移动，可以攻击但命中率下降
+	INVISIBLE = 16,      # 隐身 - 怪物无法发现，攻击后显形
+	HIDDEN = 32,         # 潜行 - 移动速度下降，怪物较难发现
+	DEAD = 64,           # 死亡 - 无法进行任何操作，等待复活
+	TRANSMITTING = 128,  # 传送中 - 无敌状态，无法被攻击
+	SILENCED = 256,      # 沉默 - 无法使用技能，只能普通攻击
+	STUNNED = 512        # 眩晕 - 无法移动和攻击，防御力下降
+}
+# 使用示例：
+# 设置状态：state_flags |= StateFlags.POISONED | StateFlags.SILENCED
+# 清除状态：state_flags &= ~StateFlags.POISONED
+# 检查状态：(state_flags & StateFlags.POISONED) != 0
+
+# 战斗属性容器（统一类型）
+var combat: CombatAttributesBase = null
+
+# 位置和移动相关
+var position: Vector2 = Vector2.ZERO
+var velocity: Vector2 = Vector2.ZERO
+var rotation: float = 0.0
+var move_direction: Vector2 = Vector2.ZERO
+
+# 生命值和状态
+var current_health: int = 100
+var current_mana: int = 50
+
+# 经验与等级
+var experience: int = 0
+var level: int = 1
+
+# 状态标志
+var state_flags: int = 0
+
+# 玩家显示名称
+var nickname: String = ""
+
+func _init(initial_position: Vector2 = Vector2.ZERO):
+	position = initial_position
+	
+# 伤害和治疗
+func take_damage(damage: int):
+	current_health -= damage
+	current_health = max(0, current_health)
+	if current_health == 0:
+		set_state_flag(StateFlags.DEAD)
+
+func heal(amount: int):
+	current_health += amount
+	current_health = min(current_health, get_max_health())
+	if current_health > 0 and has_state_flag(StateFlags.DEAD):
+		clear_state_flag(StateFlags.DEAD)
+		
+# 状态检查
+func is_alive() -> bool:
+	return current_health > 0 and not has_state_flag(StateFlags.DEAD)
+	
+# 状态标志方法
+func set_state_flag(flag: int):
+	state_flags |= flag
+
+func clear_state_flag(flag: int):
+	state_flags &= ~flag
+
+func has_state_flag(flag: int) -> bool:
+	return (state_flags & flag) != 0
+
+func get_active_states() -> Array:
+	var states = []
+	for flag in StateFlags.values():
+		if has_state_flag(flag):
+			states.append(StateFlags.keys()[StateFlags.values().find(flag)])
+	return states
+
+# 基础属性访问
+func get_health() -> int:
+	return current_health
+
+func get_max_health() -> int:
+	return combat.get_max_health() if combat else 0
+	
+func get_mana() -> int:
+	return current_mana
+
+func get_max_mana() -> int:
+	return combat.get_max_mana() if combat else 0
+	
+func get_min_attack() -> int:
+	return combat.get_min_attack() if combat else 0
+
+func get_max_attack() -> int:
+	return combat.get_max_attack() if combat else 0
+
+func get_min_magic_attack() -> int:
+	return combat.get_min_magic_attack() if combat else 0
+
+func get_max_magic_attack() -> int:
+	return combat.get_max_magic_attack() if combat else 0
+	
+func get_min_defense() -> int:
+	return combat.get_min_defense() if combat else 0
+
+func get_max_defense() -> int:
+	return combat.get_max_defense() if combat else 0
+
+func get_min_magic_defense() -> int:
+	return combat.get_min_magic_defense() if combat else 0
+	
+func get_max_magic_defense() -> int:
+	return combat.get_max_magic_defense() if combat else 0
+
+func get_accuracy() -> int:
+	return combat.get_accuracy() if combat else 0
+
+func get_agility() -> int:
+	return combat.get_agility() if combat else 0
+
+func get_luck() -> int:
+	return combat.get_luck() if combat else 0
+
+func get_curse() -> int:
+	return combat.get_curse() if combat else 0
+
+func get_magic_dodge() -> float:
+	return combat.get_magic_dodge() if combat else 0.0
+
+func get_critical_rate() -> float:
+	return combat.get_critical_rate() if combat else 0.0
+
+func get_attack_speed() -> float:
+	return combat.get_attack_speed() if combat else 0.0
+	
+# 序列化
+func serialize() -> Dictionary:
+	var data = {
+		"position": {"x": position.x, "y": position.y},
+		"current_health": current_health,
+		"current_mana": current_mana,
+		"experience": experience,
+		"level": level,
+		"state_flags": state_flags,
+		"nickname": nickname
+	}
+	
+	# 序列化战斗属性
+	if combat:
+		data["combat_type"] = combat.get_class_name()  # 存储具体类型
+		data["combat"] = combat.serialize()
+	
+	return data
+
+# 反序列化
+func deserialize(data: Dictionary):
+	position = Vector2(data.get("position", {}).get("x", 0), data.get("position", {}).get("y", 0))
+	current_health = data.get("current_health", 0)
+	current_mana = data.get("current_mana", 0)
+	experience = data.get("experience", 0)
+	level = data.get("level", 1)
+	state_flags = data.get("state_flags", 0)
+	nickname = data.get("nickname", "")
+	
+	# 反序列化战斗属性
+	var combat_type = data.get("combat_type", "")
+	var combat_data = data.get("combat", {})
+	
+	match combat_type:
+		"MonsterCombatAttributes":
+			combat = MonsterCombatAttributes.new()
+		"PlayerCombatAttributes":
+			combat = PlayerCombatAttributes.new()
+	
+	if combat:
+		combat.deserialize(combat_data)
+
+
+==== res:///core/ecs/entities/game_entity.gd ====
+# game_entity.gd
+extends CharacterBody2D
+class_name GameEntity
+
+## 共享的 CircleShape2D 资源
+var data: EntityData
+var collision_shape: CollisionShape2D
+
+# 初始化函数
+func setup(entity_data: EntityData) -> void:
+	#"""初始化实体，绑定数据并连接信号"""
+	data = entity_data
+	
+	# 连接基础表现相关的信号
+	_connect_signals()
+	
+	_initial_sync()
+	print("GameEntity 初始化完成: ", data.config.entity_name)
+
+# 初始同步：用当前数据初始化基础表现
+func _initial_sync() -> void:
+   # """将初始数据同步到节点表现"""
+	position = data.get_position()
+	visible = data.runtime.is_active
+	
+	# 创建碰撞盒
+	_create_collision_shape()
+	
+	print("实体初始化: %s 位置: %s" % [data.config.entity_name, position])
+	
+# 连接数据变化的信号
+func _connect_signals() -> void:
+	pass
+	
+# 统一移动接口，子类直接调
+func move(direction: Vector2, speed: float) -> void:
+	velocity = direction * speed
+	move_and_slide()
+
+# 创建碰撞盒
+func _create_collision_shape() -> void:
+	collision_shape = CollisionShape2D.new()
+	collision_shape.shape = Game.SHARED_CIRCLE_44
+	add_child(collision_shape)
+	
+	# 1-terrain 2-entity 3-bullet 4-trigger
+	var layer := 0
+	var mask  := 0
+	match data.config.entity_type:
+		"player":
+			layer = 1<<1          # 只在第 2 层（entity）
+			mask  = (1<<0) | (1<<1) | (1<<3)   # 撞 terrain+entity+trigger
+		"monster":
+			layer = 1<<1
+			mask  = (1<<0) | (1<<1) | (1<<2)   # 撞 terrain+entity+bullet
+		"npc":
+			layer = 1<<1
+			mask  = 1<<0                       # 只撞 terrain
+		"item":
+			layer = 1<<3                       # 放在 trigger 层
+			mask  = 0                          # 不主动撞任何层
+
+	set_collision_layer(layer)
+	set_collision_mask(mask)
+	
+
+
+==== res:///core/ecs/systems/system_base.gd ====
+# res://core/ecs/systems/system_base.gd
+# 设计原则：
+#   - 无状态：系统本身不存储业务数据，只处理EntityData
+#   - 单一职责：每个系统只负责一个特定的功能领域
+#   - 批量处理：支持按批处理实体，优化性能
+class_name SystemBase extends Node2D
+
+# 系统关注的实体列表
+var entities: Array[GameEntity] = []
+
+# 系统配置
+var update_priority: int = 0          # 更新优先级（数值越小越先执行）
+var enabled: bool = true              # 系统是否启用
+
+# 批处理配置
+var use_batch_processing: bool = true # 是否启用分批处理
+var batch_size: int = 20              # 每批处理的实体数量
+var batch_threshold: int = 50         # 启用分批的实体数量阈值
+var _current_batch_index: int = 0     # 当前批处理位置
+
+# 系统标识
+var system_name: String = "UnnamedSystem"
+var system_type: String = "Generic"    # Core, Gameplay, Render, Infrastructure
+
+# 虚函数：系统初始化
+func _initialize() -> void:
+	# 系统初始化，在添加到SystemManager时调用
+	print("系统初始化: ", system_name)
+	pass
+
+# 虚函数：系统清理
+func _shutdown() -> void:
+	# 系统清理，在从SystemManager移除时调用
+	print("系统关闭: ", system_name)
+	entities.clear()
+	_current_batch_index = 0
+
+# 主更新函数 - 由SystemManager每帧调用
+func process_system(delta: float) -> void:
+	# 系统主更新函数
+	if not enabled or entities.is_empty():
+		return
+	
+	# 根据阈值决定是否启用分批处理
+	if use_batch_processing and entities.size() > batch_threshold:
+		_process_with_batching(delta)
+	else:
+		_process_all_entities(delta)
+
+# 分批处理模式
+func _process_with_batching(delta: float) -> void:
+	# 分批处理实体
+	var start_idx = _current_batch_index
+	var end_idx = min(start_idx + batch_size, entities.size())
+	
+	# 处理当前批次
+	for i in range(start_idx, end_idx):
+		var entity = entities[i]
+		if entity and entity.is_entity_active():
+			# ⛔ 不符合条件直接走人
+			if not _should_process_entity(entity):
+				continue
+			_process_entity(entity, delta)
+	
+	# 更新批处理位置（循环）
+	_current_batch_index = end_idx
+	if _current_batch_index >= entities.size():
+		_current_batch_index = 0
+
+# 全量处理模式
+func _process_all_entities(delta: float) -> void:
+	# 全量处理所有实体
+	for entity in entities:
+		if entity and entity.is_entity_active():
+			# ⛔ 不符合条件直接走人
+			if not _should_process_entity(entity):
+				continue
+			_process_entity(entity, delta)
+
+# 子类重写此函数即可，默认全通过
+func _should_process_entity(_entity: GameEntity) -> bool:
+	return true
+	
+# 虚函数：处理单个实体
+func _process_entity(_entity: GameEntity, _delta: float) -> void:
+	# 处理单个实体（子类必须重写此方法）
+	push_error("SystemBase._process_entity() 必须被子类重写: ", system_name)
+
+# 实体管理
+func register_entity(entity: GameEntity) -> void:
+	# 向系统注册实体
+	if entity and not entities.has(entity):
+		entities.append(entity)
+		_on_entity_registered(entity)
+
+func unregister_entity(entity: GameEntity) -> void:
+	# 从系统注销实体
+	if entities.has(entity):
+		entities.erase(entity)
+		_on_entity_unregistered(entity)
+		# 如果删除的实体在_current_batch_index之前，需要调整索引
+		if entities.size() > 0 and _current_batch_index >= entities.size():
+			_current_batch_index = 0
+
+func clear_entities() -> void:
+	# 清空所有实体
+	for entity in entities:
+		_on_entity_unregistered(entity)
+	entities.clear()
+	_current_batch_index = 0
+
+# 实体事件回调
+func _on_entity_registered(entity: GameEntity) -> void:
+	# 实体注册时的回调
+	print("实体注册到系统: ", system_name, " - ", entity.data.config.entity_name)
+
+func _on_entity_unregistered(entity: GameEntity) -> void:
+	# 实体注销时的回调
+	print("实体从系统注销: ", system_name, " - ", entity.data.config.entity_name)
+
+# 系统状态控制
+func enable() -> void:
+	# 启用系统
+	if not enabled:
+		enabled = true
+		print("系统启用: ", system_name)
+
+func disable() -> void:
+	# 禁用系统
+	if enabled:
+		enabled = false
+		print("系统禁用: ", system_name)
+
+func toggle_enabled() -> bool:
+	# 切换系统启用状态
+	enabled = not enabled
+	print("系统状态切换: ", system_name, " -> ", enabled)
+	return enabled
+
+# 批处理配置方法
+func set_batch_settings(use_batch: bool, threshold: int, size: int) -> void:
+	# 设置批处理参数
+	use_batch_processing = use_batch
+	batch_threshold = max(1, threshold)
+	batch_size = max(1, size)
+	print("批处理设置更新: ", system_name, " 阈值=", threshold, " 批大小=", size)
+
+func disable_batching() -> void:
+	# 禁用批处理
+	use_batch_processing = false
+	print("批处理已禁用: ", system_name)
+
+# 工具函数
+func get_entity_count() -> int:
+	# 获取当前管理的实体数量
+	return entities.size()
+
+func is_system_processing() -> bool:
+	# 检查系统是否正在处理（启用且有实体）
+	return enabled and not entities.is_empty()
+
+func get_batch_info() -> Dictionary:
+	# 获取批处理信息
+	return {
+		"use_batch_processing": use_batch_processing,
+		"batch_threshold": batch_threshold,
+		"batch_size": batch_size,
+		"current_batch_index": _current_batch_index,
+		"is_using_batch": use_batch_processing and entities.size() > batch_threshold
+	}
+
+func get_system_info() -> Dictionary:
+	# 获取系统信息（用于调试）
+	return {
+		"name": system_name,
+		"type": system_type,
+		"enabled": enabled,
+		"entity_count": entities.size(),
+		"priority": update_priority,
+		"batch_info": get_batch_info()
+	}
+
+# 调试功能
+func print_debug_info() -> void:
+	# 打印系统调试信息
+	var info = get_system_info()
+	print("=== 系统调试信息 ===")
+	for key in info:
+		if key != "batch_info":
+			print("  ", key, ": ", info[key])
+	
+	var batch_info = info["batch_info"]
+	print("  批处理信息:")
+	for key in batch_info:
+		print("    ", key, ": ", batch_info[key])
+	
+	print("  实体列表:")
+	for entity in entities:
+		if entity and entity.data:
+			print("    - ", entity.data.config.entity_name)
+
+
+==== res:///exported_scripts.gd ====
+@tool
+extends EditorScript
+
+const EXPORT_FILE := "exported_scripts.txt"
+
+func _init() -> void:
+	# 1) 导出所有 .gd 文件
+	_export_all_scripts()
+	
+
+# ---------- 1. 导出脚本 ----------
+func _export_all_scripts() -> void:
+	var files := _list_all_gd_files("res://")
+	var content := ""
+	for path in files:
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file:
+			content += "\n\n==== %s ====\n" % path
+			content += file.get_as_text()
+			file.close()
+	var out := FileAccess.open(EXPORT_FILE, FileAccess.WRITE)
+	out.store_string(content)
+	out.close()
+	print("📁 已导出 %d 个脚本 -> %s" % [files.size(), EXPORT_FILE])
+
+# 递归收集 .gd
+func _list_all_gd_files(dir: String) -> PackedStringArray:
+	var list := PackedStringArray()
+	var dir_access := DirAccess.open(dir)
+	if dir_access:
+		dir_access.list_dir_begin()
+		var name := dir_access.get_next()
+		while name != "":
+			var full := dir + "/" + name
+			if dir_access.current_is_dir() and not name.begins_with("."):
+				list.append_array(_list_all_gd_files(full))
+			elif name.ends_with(".gd"):
+				list.append(full)
+			name = dir_access.get_next()
+	return list
+
+
+==== res:///global/game.gd ====
+extends Node
+
+const SHARED_CIRCLE_44 = preload("uid://ljqm0hcpijnt")
+const SHARED_CIRCLE_72 = preload("uid://dlwg14a8t4brl")
+const SHARED_CIRCLE_108 = preload("uid://cgqk4mwv7hg0i")
+
+# 默认系统注册配置
+var system_registrations: Array = [
+	# 核心系统
+	#{
+		#"script": load("res://core/ecs/systems/infrastructure/touch_input_system.gd"),
+		#"group": "infrastructure",
+		#"name": "TouchInputSystem ",
+		#"needs_scene_tree": true,  # 🎯 需要场景树来处理输入事件
+		#"priority": 1  # 🎯 最高优先级
+	#},
+]
+
+
+==== res:///global/system_manager.gd ====
+# res://global/system_manager.gd
+extends Node
+# 作用：ECS架构的核心调度器，管理和协调所有系统的执行
+# 职责：
+#   - 注册和管理所有系统实例
+#   - 按优先级调度系统执行
+#   - 提供系统间的通信桥梁
+#   - 支持系统的动态启用/禁用
+
+# Godot单例：不需要class_name，直接在AutoLoad中加载
+
+# 系统注册表
+var _systems: Dictionary = {}           # 系统名称 -> 系统实例
+var _system_instances: Array = []       # 所有系统实例
+var _update_order: Array = []           # 按优先级排序的系统名称列表
+
+# 系统组别
+var _system_groups: Dictionary = {
+	"core": [],        # 核心系统：移动、战斗等
+	"gameplay": [],    # 玩法系统：装备、技能等  
+	"render": [],      # 渲染系统：动画、UI等
+	"infrastructure": [] # 基础设施：网络、存档等
+}
+
+# 性能监控
+var _performance_counter: int = 0       # 性能统计计数器（0-60循环）
+var _system_performance: Dictionary = {} # 系统性能数据
+
+var _check_frame:int = 300
+
+# 就绪函数
+func _ready():
+	print("SystemManager 初始化完成")
+	_setup_default_systems()
+	
+# 每帧更新
+func _process(delta: float):
+	_performance_counter += 1
+	_update_systems(delta)
+	
+	# 每60帧输出一次性能报告并重置
+	if _performance_counter >= _check_frame:
+		_print_performance_report()
+		_reset_performance_counters()
+		_performance_counter = 0
+
+# 设置默认系统
+func _setup_default_systems():
+	print("开始注册默认系统...")
+	
+	for registration in Game.system_registrations:
+		_register_system_internal(registration)
+	
+	print("默认系统注册完成")
+
+# 内部系统注册方法
+func _register_system_internal(registration: Dictionary):
+	var system_script = registration.get("script")
+	var group = registration.get("group", "core")
+	var needs_scene_tree = registration.get("needs_scene_tree", false)
+	var priority = registration.get("priority", 50)  # 🎯 获取优先级
+	
+	if not system_script:
+		push_error("系统注册缺少script")
+		return
+	
+	var system_instance = system_script.new()
+	
+	# 🎯 设置系统优先级
+	system_instance.update_priority = priority
+	
+	if needs_scene_tree:
+		add_child(system_instance)
+		system_instance.name = registration.get("name", "UnnamedSystem")
+		
+	if register_system(system_instance, group, needs_scene_tree):
+		print("✅ 系统注册成功: ", system_instance.system_name, " 优先级: ", priority)
+	else:
+		push_error("❌ 系统注册失败")
+
+# 注册系统
+func register_system(system:SystemBase, group: String = "core", needs_scene_tree: bool = false) -> bool:
+	# 简单的类型检查
+	if system == null:
+		push_error("注册失败：系统为 null")
+		return false
+	
+	# 先初始化系统，让系统设置自己的名称
+	if system.has_method("_initialize"):
+		system._initialize()
+	
+	# 初始化后再获取系统名称
+	var system_name = system.system_name
+	print("正在注册系统: ", system_name)
+	
+	if _systems.has(system_name):
+		push_error("系统已存在: " + system_name)
+		return false
+	
+	# 注册系统
+	_systems[system_name] = system
+	_system_instances.append(system)
+	
+	# 添加到组别
+	if _system_groups.has(group):
+		_system_groups[group].append(system_name)
+	else:
+		_system_groups[group] = [system_name]
+	
+	# 更新执行顺序
+	_update_execution_order()
+		
+	print("系统注册成功: ", system_name, " 组别: ", group)
+	
+	# 通知其他系统有新系统注册
+	_notify_system_registered(system.system_name)
+	
+	return true
+
+func _notify_system_registered(system_name: String):
+	# 其他系统可以监听这个通知来更新依赖
+	for system in _system_instances:
+		if system.has_method("_on_system_registered"):
+			system._on_system_registered(system_name)
+	
+# 注销系统
+func unregister_system(system_name: String) -> bool:
+	if not _systems.has(system_name):
+		push_error("系统不存在: " + system_name)
+		return false
+	
+	var system = _systems[system_name]
+	
+	# 执行系统清理
+	if system.has_method("_shutdown"):
+		system._shutdown()
+	
+	# 从所有组别中移除
+	for group in _system_groups:
+		_system_groups[group].erase(system_name)
+	
+	# 从注册表中移除
+	_systems.erase(system_name)
+	_system_instances.erase(system)
+	_update_order.erase(system_name)
+	
+	print("系统注销成功: ", system_name)
+	return true
+
+# 获取系统
+func get_system(system_name: String):
+	return _systems.get(system_name)
+
+# 检查系统是否存在
+func has_system(system_name: String) -> bool:
+	return _systems.has(system_name)
+
+# 更新系统执行顺序
+func _update_execution_order():
+	# 按优先级排序
+	_system_instances.sort_custom(_compare_system_priority)
+	_update_order.clear()
+	
+	for system in _system_instances:
+		_update_order.append(system.system_name)
+
+# 系统优先级比较函数
+func _compare_system_priority(a, b) -> bool:
+	return a.update_priority < b.update_priority
+
+# 系统更新循环
+func _update_systems(delta: float):
+	for system_name in _update_order:
+		var system = _systems[system_name]
+		if system and system.enabled:
+			var system_start_time = Time.get_ticks_usec()
+			
+			# 执行系统更新
+			system.process_system(delta)
+			
+			# 记录性能数据
+			var system_time = Time.get_ticks_usec() - system_start_time
+			_record_system_performance(system_name, system_time)
+
+# 记录系统性能
+func _record_system_performance(system_name: String, execution_time: int):
+	if not _system_performance.has(system_name):
+		_system_performance[system_name] = {
+			"total_time": 0,
+			"max_time": 0,
+			"call_count": 0,
+			"average_time": 0
+		}
+	
+	var perf = _system_performance[system_name]
+	perf.total_time += execution_time
+	perf.call_count += 1
+	perf.max_time = max(perf.max_time, execution_time)
+	perf.average_time = perf.total_time / perf.call_count
+
+# 重置性能计数器
+func _reset_performance_counters():
+	for system_name in _system_performance:
+		_system_performance[system_name].call_count = 0
+		_system_performance[system_name].total_time = 0
+
+# 输出性能报告
+func _print_performance_report():
+	print("=== 系统性能报告 (采样%d帧) ===" % _check_frame)
+	
+	var total_system_time = 0
+	var has_data = false
+	
+	for system_name in _system_performance:
+		var perf = _system_performance[system_name]
+		if perf.call_count > 0:
+			has_data = true
+			total_system_time += perf.average_time
+			print("  %s: 平均%.2fμs, 最大%dμs, 调用%d次" % [
+				system_name, perf.average_time, perf.max_time, perf.call_count
+			])
+	
+	if has_data:
+		print("  总系统时间: %.2fμs" % total_system_time)
+		print("  活跃系统数量: ", _get_active_system_count())
+	else:
+		print("  暂无性能数据")
+
+# 获取活跃系统数量
+func _get_active_system_count() -> int:
+	var count = 0
+	for system in _system_instances:
+		if system.enabled and system.is_system_processing():
+			count += 1
+	return count
+
+# 按组别启用/禁用系统
+func set_group_enabled(group: String, enabled: bool):
+	if not _system_groups.has(group):
+		push_error("系统组别不存在: " + group)
+		return
+	
+	for system_name in _system_groups[group]:
+		var system = _systems[system_name]
+		if system:
+			if enabled:
+				system.enable()
+			else:
+				system.disable()
+
+# 获取系统信息
+func get_system_info() -> Dictionary:
+	var info = {
+		"total_systems": _system_instances.size(),
+		"active_systems": _get_active_system_count(),
+		"system_groups": {},
+		"performance_data": _system_performance.duplicate()
+	}
+	
+	for group in _system_groups:
+		info["system_groups"][group] = _system_groups[group].size()
+	
+	return info
+
+# 调试功能
+func print_debug_info():
+	var info = get_system_info()
+	print("=== SystemManager 调试信息 ===")
+	print("总系统数量: ", info.total_systems)
+	print("活跃系统数量: ", info.active_systems)
+	print("系统组别分布:")
+	for group in info.system_groups:
+		print("  ", group, ": ", info.system_groups[group])
+	
+	print("系统执行顺序:")
+	for i in range(_update_order.size()):
+		var system = _systems[_update_order[i]]
+		print("  %d. %s (优先级: %d)" % [i + 1, system.system_name, system.update_priority])
+
+# 实体注册到所有相关系统
+func register_entity_to_systems(entity):
+	for system in _system_instances:
+		system.register_entity(entity)
+
+# 实体从所有系统注销
+func unregister_entity_from_systems(entity):
+	for system in _system_instances:
+		system.unregister_entity(entity)

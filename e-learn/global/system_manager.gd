@@ -30,6 +30,8 @@ var _check_frame:int = 300
 
 # 就绪函数
 func _ready():
+	if not Game or not Game.is_node_ready():
+		await Game.ready
 	print("SystemManager 初始化完成")
 	_setup_default_systems()
 	

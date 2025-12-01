@@ -30,7 +30,30 @@ func _initial_sync() -> void:
 	
 # 连接数据变化的信号
 func _connect_signals() -> void:
-	pass
+	 # 位置变化同步
+	data.position_changed.connect(_on_position_changed)
+	# 生命值变化同步
+	data.health_changed.connect(_on_health_changed)
+	# 通用数据变化
+	data.data_changed.connect(_on_data_changed)
+	
+func _on_position_changed(old_pos: Vector2, new_pos: Vector2):
+	position = new_pos
+	print("实体 %s 位置更新: %s -> %s" % [data.config.entity_name, old_pos, new_pos])
+
+func _on_health_changed(old_health: int, new_health: int):
+	print("实体 %s 生命值变化: %d -> %d" % [data.config.entity_name, old_health, new_health])
+	# 这里可以添加血条更新、受伤动画等
+
+func _on_data_changed(property_name: String, old_value, new_value):
+	print("实体 %s 数据变化: %s = %s -> %s" % [
+		data.config.entity_name, property_name, old_value, new_value
+	])
+	
+
+func get_entity_data() -> EntityData:
+	#"""获取实体数据（供System使用）"""
+	return data
 	
 # 统一移动接口，子类直接调
 func move(direction: Vector2, speed: float) -> void:
@@ -63,3 +86,5 @@ func _create_collision_shape() -> void:
 	set_collision_layer(layer)
 	set_collision_mask(mask)
 	
+func is_entity_active() -> bool:
+	return data != null and data.runtime.is_alive()

@@ -27,6 +27,7 @@ var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
 var rotation: float = 0.0
 var move_direction: Vector2 = Vector2.ZERO
+var is_active: bool = true
 
 # 生命值和状态
 var current_health: int = 100
