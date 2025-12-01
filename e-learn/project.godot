@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Game="*res://global/game.tscn"
+SystemManager="*res://global/system_manager.gd"
 
 [display]
 
