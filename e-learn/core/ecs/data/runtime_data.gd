@@ -19,7 +19,7 @@ enum StateFlags {
 # 清除状态：state_flags &= ~StateFlags.POISONED
 # 检查状态：(state_flags & StateFlags.POISONED) != 0
 
-# 战斗属性（统一类型）
+# 战斗属性容器（统一类型）
 var combat: CombatAttributesBase = null
 
 # 位置和移动相关
