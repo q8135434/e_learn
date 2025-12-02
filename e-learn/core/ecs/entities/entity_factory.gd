@@ -93,8 +93,8 @@ static func create_player_from_profile(position: Vector2 = Vector2.ZERO, parent_
 	runtime.combat.job.deserialize(job_template)
 	
 	# 初始化当前值
-	runtime.current_health = runtime.combat.get_health()
-	runtime.current_mana = runtime.combat.get_mana()
+	runtime.current_health = runtime.get_health()
+	runtime.current_mana = runtime.get_mana()
 	
 	# 设置玩法状态
 	var session = Game.data.gameplay_session_data

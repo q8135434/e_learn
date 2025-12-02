@@ -41,10 +41,10 @@ func _process(delta: float):
 	_update_systems(delta)
 	
 	# 每60帧输出一次性能报告并重置
-	if _performance_counter >= _check_frame:
-		_print_performance_report()
-		_reset_performance_counters()
-		_performance_counter = 0
+	#if _performance_counter >= _check_frame:
+		#_print_performance_report()
+		#_reset_performance_counters()
+		#_performance_counter = 0
 
 # 设置默认系统
 func _setup_default_systems():

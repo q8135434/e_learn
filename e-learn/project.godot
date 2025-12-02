@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="e_learn"
+run/main_scene="uid://px2xmn2aildm"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -45,10 +46,6 @@ pointing/emulate_touch_from_mouse=true
 2d_physics/layer_2="entity"
 2d_physics/layer_3="bullet"
 2d_physics/layer_4="trigger"
-
-[physics]
-
-common/physics_ticks_per_second=30
 
 [rendering]
 

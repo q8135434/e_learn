@@ -14,10 +14,20 @@ enum StateFlags {
 	SILENCED = 256,      # 沉默 - 无法使用技能，只能普通攻击
 	STUNNED = 512        # 眩晕 - 无法移动和攻击，防御力下降
 }
-# 使用示例：
-# 设置状态：state_flags |= StateFlags.POISONED | StateFlags.SILENCED
-# 清除状态：state_flags &= ~StateFlags.POISONED
-# 检查状态：(state_flags & StateFlags.POISONED) != 0
+
+# 战斗模式定义（可以放在顶部，与StateFlags并列）
+enum BattleMode {
+	MANUAL = 0,      # 手动模式
+	ASSIST = 1,      # 点击辅助模式  
+	FULL_AUTO = 2    # 全自动模式
+}
+
+enum AutoBattleState {
+	IDLE = 0,           # 待机
+	FIND_TARGET = 1,    # 寻找目标
+	MOVE_TO_TARGET = 2, # 移动到目标
+	ATTACKING = 3,      # 攻击中
+}
 
 # 战斗属性容器（统一类型）
 var combat: CombatAttributesBase = null
@@ -27,7 +37,10 @@ var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
 var rotation: float = 0.0
 var move_direction: Vector2 = Vector2.ZERO
-var is_active: bool = true
+
+var is_active: bool = true			# 是否显示、隐藏实体
+var is_moving: bool = false			# 死否移动中
+var is_in_camera_view:bool = false	# 是否处于摄像机范围内
 
 # 生命值和状态
 var current_health: int = 100
@@ -39,9 +52,31 @@ var level: int = 1
 
 # 状态标志
 var state_flags: int = 0
-
+ 
 # 玩家显示名称
 var nickname: String = ""
+
+# 战斗模式相关字段
+var battle_mode: int = BattleMode.MANUAL
+
+# 通用点击目标（所有模式都可用）
+var click_target: Dictionary = {
+	"type": "none",      # "none", "move", "attack"
+	"position": Vector2.INF,
+	"entity_id": ""
+}
+
+# 自动模式专用数据（只在ASSIST/FULL_AUTO时有效）
+var auto_data: Dictionary = {
+	"state": AutoBattleState.IDLE,  # AutoBattleState
+	"search_timer": 0.0,
+	"target_refresh_timer": 0.0,
+	"current_target_id": "",
+	"last_target_position": Vector2.ZERO
+}
+
+# 当前实时战斗状态
+var current_target_id: String = ""
 
 func _init(initial_position: Vector2 = Vector2.ZERO):
 	position = initial_position
@@ -85,13 +120,25 @@ func get_health() -> int:
 	return current_health
 
 func get_max_health() -> int:
-	return combat.get_max_health() if combat else 0
+	if combat:
+		if combat.get_health() <= 0:
+			return 100
+		else :
+			return combat.get_health()
+	else :
+		return 100
 	
 func get_mana() -> int:
 	return current_mana
 
 func get_max_mana() -> int:
-	return combat.get_max_mana() if combat else 0
+	if combat:
+		if combat.get_mana() <= 0:
+			return 50
+		else :
+			return combat.get_mana()
+	else :
+		return 50
 	
 func get_min_attack() -> int:
 	return combat.get_min_attack() if combat else 0

@@ -6,6 +6,8 @@ var entity_id: String = ""				# 实体唯一ID
 var entity_name: String = ""				# 显示名称（怪物/NPC用）
 var entity_type: String = ""				# player, monster, npc, item
 var prefab_path: String = ""				# 对应的场景文件路径
+# 移动速度配置（像素/秒）
+var move_speed: float = 100.0  # 默认移动速度
 
 # 技能和装备配置
 var skills: Array[String] = []
@@ -13,7 +15,6 @@ var equipment_slots: Array[String] = []
 
 # 视觉和表现
 var sprite_path: String = ""
-var collision_shape: String = ""
 var scale: Vector2 = Vector2.ONE
 
 # === 玩家特有配置 ===
@@ -35,12 +36,14 @@ func _init(
 	id: String = "", 
 	name: String = "", 
 	type: String = "player", 
-	char_class: String = "warrior"
+	char_class: String = "warrior",
+	speed:float = 100.0
 ):
 	entity_id = id
 	entity_name = name
 	entity_type = type
 	character_class = char_class
+	move_speed = speed
 	
 # === 工具方法 ===
 func get_class_display_name() -> String:

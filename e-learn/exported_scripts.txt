@@ -310,6 +310,8 @@ var entity_id: String = ""				# 实体唯一ID
 var entity_name: String = ""				# 显示名称（怪物/NPC用）
 var entity_type: String = ""				# player, monster, npc, item
 var prefab_path: String = ""				# 对应的场景文件路径
+# 移动速度配置（像素/秒）
+var move_speed: float = 300.0  # 默认移动速度
 
 # 技能和装备配置
 var skills: Array[String] = []
@@ -317,7 +319,6 @@ var equipment_slots: Array[String] = []
 
 # 视觉和表现
 var sprite_path: String = ""
-var collision_shape: String = ""
 var scale: Vector2 = Vector2.ONE
 
 # === 玩家特有配置 ===
@@ -339,12 +340,14 @@ func _init(
 	id: String = "", 
 	name: String = "", 
 	type: String = "player", 
-	char_class: String = "warrior"
+	char_class: String = "warrior",
+	speed:float = 300.0
 ):
 	entity_id = id
 	entity_name = name
 	entity_type = type
 	character_class = char_class
+	move_speed = 3000.0
 	
 # === 工具方法 ===
 func get_class_display_name() -> String:
@@ -547,10 +550,20 @@ enum StateFlags {
 	SILENCED = 256,      # 沉默 - 无法使用技能，只能普通攻击
 	STUNNED = 512        # 眩晕 - 无法移动和攻击，防御力下降
 }
-# 使用示例：
-# 设置状态：state_flags |= StateFlags.POISONED | StateFlags.SILENCED
-# 清除状态：state_flags &= ~StateFlags.POISONED
-# 检查状态：(state_flags & StateFlags.POISONED) != 0
+
+# 战斗模式定义（可以放在顶部，与StateFlags并列）
+enum BattleMode {
+	MANUAL = 0,      # 手动模式
+	ASSIST = 1,      # 点击辅助模式  
+	FULL_AUTO = 2    # 全自动模式
+}
+
+enum AutoBattleState {
+	IDLE = 0,           # 待机
+	FIND_TARGET = 1,    # 寻找目标
+	MOVE_TO_TARGET = 2, # 移动到目标
+	ATTACKING = 3,      # 攻击中
+}
 
 # 战斗属性容器（统一类型）
 var combat: CombatAttributesBase = null
@@ -560,6 +573,10 @@ var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
 var rotation: float = 0.0
 var move_direction: Vector2 = Vector2.ZERO
+
+var is_active: bool = true			# 是否显示、隐藏实体
+var is_moving: bool = false			# 死否移动中
+var is_in_camera_view:bool = false	# 是否处于摄像机范围内
 
 # 生命值和状态
 var current_health: int = 100
@@ -571,9 +588,31 @@ var level: int = 1
 
 # 状态标志
 var state_flags: int = 0
-
+ 
 # 玩家显示名称
 var nickname: String = ""
+
+# 战斗模式相关字段
+var battle_mode: int = BattleMode.MANUAL
+
+# 通用点击目标（所有模式都可用）
+var click_target: Dictionary = {
+	"type": "none",      # "none", "move", "attack"
+	"position": Vector2.INF,
+	"entity_id": ""
+}
+
+# 自动模式专用数据（只在ASSIST/FULL_AUTO时有效）
+var auto_data: Dictionary = {
+	"state": AutoBattleState.IDLE,  # AutoBattleState
+	"search_timer": 0.0,
+	"target_refresh_timer": 0.0,
+	"current_target_id": "",
+	"last_target_position": Vector2.ZERO
+}
+
+# 当前实时战斗状态
+var current_target_id: String = ""
 
 func _init(initial_position: Vector2 = Vector2.ZERO):
 	position = initial_position
@@ -617,13 +656,25 @@ func get_health() -> int:
 	return current_health
 
 func get_max_health() -> int:
-	return combat.get_max_health() if combat else 0
+	if combat:
+		if combat.get_health() <= 0:
+			return 100
+		else :
+			return combat.get_health()
+	else :
+		return 100
 	
 func get_mana() -> int:
 	return current_mana
 
 func get_max_mana() -> int:
-	return combat.get_max_mana() if combat else 0
+	if combat:
+		if combat.get_mana() <= 0:
+			return 50
+		else :
+			return combat.get_mana()
+	else :
+		return 50
 	
 func get_min_attack() -> int:
 	return combat.get_min_attack() if combat else 0
@@ -713,6 +764,227 @@ func deserialize(data: Dictionary):
 		combat.deserialize(combat_data)
 
 
+==== res:///core/ecs/entities/entity_factory.gd ====
+# res://core/ecs/entities/entity_factory.gd
+class_name EntityFactory
+
+# 创建怪物实体
+static func create_monster(monster_id: String, position: Vector2 = Vector2.ZERO, parent_node: Node = null) -> GameEntity:
+	# 验证怪物配置是否存在
+	if not Game.config_manager.monster_templates.has(monster_id):
+		push_error("怪物配置不存在: " + monster_id)
+		return null
+	
+	# 获取怪物配置数据
+	var monster_data = Game.config_manager.monster_templates[monster_id]
+	var monster_skills = monster_data.get("skills", [])
+	
+	# 生成唯一实体ID
+	var entity_id = "monster_%s_%s" % [monster_id, _generate_unique_id()]
+	
+	# 创建ConfigData - 只设置最基础的身份信息
+	var config = ConfigData.new(
+		entity_id,
+		monster_data.monster_name,
+		"monster",
+		"monster"
+	)
+	config.ai_behavior = monster_data.get("ai_behavior", "passive")
+	config.monster_rank = monster_data.get("monster_rank", "normal")
+	for skill_id in monster_skills:
+		# 怪物技能不需要存到player_skills，直接在ConfigData中设置
+		if not config.skills.has(skill_id):
+			config.skills.append(skill_id)
+	
+	# 创建RuntimeData - 使用MonsterCombatAttributes
+	var runtime := RuntimeData.new(position)
+	runtime.combat = MonsterCombatAttributes.new()
+	
+	# 设置怪物基础属性（base层）
+	runtime.combat.base.deserialize(monster_data)
+	
+	# 初始化当前值
+	runtime.current_health = runtime.combat.get_health()
+	runtime.current_mana = runtime.combat.get_mana()
+	runtime.level = monster_data.level
+	
+	# 创建EntityData
+	var entity_data = EntityData.new(runtime, config)
+	
+	# 创建GameEntity
+	var game_entity = GameEntity.new()
+	game_entity.setup(entity_data)
+	
+	# 挂载到父节点
+	if parent_node and parent_node is Node:
+		parent_node.add_child(game_entity)
+		print("✅ 怪物挂载完成: ", monster_data.monster_name)
+	else:
+		push_warning("⚠️ 怪物创建但未挂载: " + monster_data.monster_name)
+	
+	# 自动注册到ECS系统
+	EntityRegistry.register_entity(game_entity)
+	
+	print("✅ 怪物创建成功: %s (%s) 位置: %s" % [monster_data.monster_name, monster_id, position])
+	return game_entity
+
+# 创建玩家实体
+static func create_player_from_profile(position: Vector2 = Vector2.ZERO, parent_node: Node = null) -> GameEntity:
+	var profile = Game.data.profile
+	
+	# 根据职业选择玩家配置ID
+	var config_id = _get_player_config_id(profile.job)
+	
+	# 生成唯一实体ID
+	var entity_id = "player_%d_%s" % [profile.user_id, _generate_unique_id()]
+	
+	# 创建ConfigData - 只设置最基础的身份信息
+	var config = ConfigData.new(
+		entity_id,
+		"",  # 名称留空，使用昵称
+		"player",
+		_get_class_string(profile.job)
+	)
+	
+	# 创建RuntimeData - 使用PlayerCombatAttributes
+	var runtime = RuntimeData.new(position)
+	runtime.combat = PlayerCombatAttributes.new()
+	
+	# 设置玩家个性化数据
+	runtime.nickname = profile.nickname
+	runtime.level = profile.level
+	runtime.experience = profile.experience
+	
+	# 从职业模板初始化基础属性
+	var job_template = Game.config_manager.player_templates.get(config_id, {})
+	runtime.combat.job.deserialize(job_template)
+	
+	# 初始化当前值
+	runtime.current_health = runtime.get_health()
+	runtime.current_mana = runtime.get_mana()
+	
+	# 设置玩法状态
+	var session = Game.data.gameplay_session_data
+	#runtime.auto_battle = session.auto_battle
+	#runtime.current_battle_mode = session.current_battle_mode
+	
+	# 🎯 初始化玩家技能
+	_initialize_player_skills(profile, config)
+	
+	# 创建EntityData
+	var entity_data = EntityData.new(runtime, config)
+	
+	# 创建GameEntity
+	var game_entity = GameEntity.new()
+	game_entity.setup(entity_data)
+	
+	# 挂载到父节点
+	if parent_node and parent_node is Node:
+		parent_node.add_child(game_entity)
+		print("✅ 玩家挂载完成: ", profile.nickname)
+	else:
+		push_warning("⚠️ 玩家创建但未挂载: " + profile.nickname)
+	
+	# 自动注册到ECS系统
+	EntityRegistry.register_entity(game_entity)
+	
+	print("✅ 玩家创建成功: %s Lv.%d 位置: %s" % [profile.nickname, profile.level, position])
+	return game_entity
+
+# 创建NPC实体
+static func create_npc(npc_id: String, position: Vector2 = Vector2.ZERO, parent_node: Node = null) -> GameEntity:
+	# 这里需要你有npc_templates配置
+	if not Game.config_manager.has("npc_templates") or not Game.config_manager.npc_templates.has(npc_id):
+		push_error("NPC配置不存在: " + npc_id)
+		return null
+	
+	var npc_data = Game.config_manager.npc_templates[npc_id]
+	
+	# 生成唯一实体ID
+	var entity_id = "npc_%s_%s" % [npc_id, _generate_unique_id()]
+	
+	# 创建ConfigData
+	var config = ConfigData.new(
+		entity_id,
+		npc_data.npc_name,
+		"npc",
+		"npc"
+	)
+	
+	# 创建RuntimeData - NPC可能不需要战斗属性，或者使用基础版本
+	var runtime = RuntimeData.new(position)
+	# runtime.combat = NPCCombatAttributes.new()  # 如果需要的话
+	
+	# 创建EntityData
+	var entity_data = EntityData.new(runtime, config)
+	
+	# 创建GameEntity
+	var game_entity = GameEntity.new()
+	game_entity.setup(entity_data)
+	
+	# 挂载到父节点
+	if parent_node and parent_node is Node:
+		parent_node.add_child(game_entity)
+		print("✅ NPC挂载完成: ", npc_data.npc_name)
+	
+	# 自动注册到ECS系统
+	EntityRegistry.register_entity(game_entity)
+	
+	print("✅ NPC创建成功: %s (%s) 位置: %s" % [npc_data.npc_name, npc_id, position])
+	return game_entity
+
+static func _initialize_player_skills(profile: UserProfileData, config: ConfigData):
+	# 2. 清空ConfigData中的技能列表（准备重新构建）
+	config.skills.clear()
+	
+	# 5. 添加额外学习的技能（不在职业基础中的）
+	for skill_id in Game.data.player_skills.skills:
+		if not config.skills.has(skill_id):
+			config.skills.append(skill_id)
+	
+	print("✅ 玩家技能初始化: %s - 职业: %s, 技能数: %d" % [
+		profile.nickname, 
+		_get_class_string(profile.job),
+		config.skills.size()
+	])
+
+	
+# 🛠️ 工具方法
+
+# 获取所有可用的怪物ID
+static func get_available_monsters() -> Array[String]:
+	return Game.config_manager.monster_templates.keys()
+
+# 检查怪物配置是否存在
+static func monster_exists(monster_id: String) -> bool:
+	return Game.config_manager.monster_templates.has(monster_id)
+
+# 获取所有可用的玩家职业配置ID
+static func get_available_player_classes() -> Array[String]:
+	if Game.config_manager.has("player_templates"):
+		return Game.config_manager.player_templates.keys()
+	return ["player_warrior", "player_mage", "player_taoist"]
+
+# 🎯 内部工具方法
+
+static func _generate_unique_id() -> String:
+	return str(Time.get_ticks_msec()) + "_" + str(randi() % 10000)
+
+static func _get_player_config_id(job: int) -> String:
+	match job:
+		1: return "player_warrior"
+		2: return "player_mage" 
+		3: return "player_taoist"
+		_: return "player_warrior"
+
+static func _get_class_string(job: int) -> String:
+	match job:
+		1: return "warrior"
+		2: return "mage"
+		3: return "taoist"
+		_: return "warrior"
+
+
 ==== res:///core/ecs/entities/game_entity.gd ====
 # game_entity.gd
 extends CharacterBody2D
@@ -746,11 +1018,33 @@ func _initial_sync() -> void:
 	
 # 连接数据变化的信号
 func _connect_signals() -> void:
-	pass
+	 # 位置变化同步
+	data.position_changed.connect(_on_position_changed)
+	# 生命值变化同步
+	data.health_changed.connect(_on_health_changed)
+	# 通用数据变化
+	data.data_changed.connect(_on_data_changed)
+	
+func _on_position_changed(old_pos: Vector2, new_pos: Vector2):
+	position = new_pos
+	print("实体 %s 位置更新: %s -> %s" % [data.config.entity_name, old_pos, new_pos])
+
+func _on_health_changed(old_health: int, new_health: int):
+	print("实体 %s 生命值变化: %d -> %d" % [data.config.entity_name, old_health, new_health])
+	# 这里可以添加血条更新、受伤动画等
+
+func _on_data_changed(property_name: String, old_value, new_value):
+	print("实体 %s 数据变化: %s = %s -> %s" % [
+		data.config.entity_name, property_name, old_value, new_value
+	])
+	
+
+func get_entity_data() -> EntityData:
+	#"""获取实体数据（供System使用）"""
+	return data
 	
 # 统一移动接口，子类直接调
-func move(direction: Vector2, speed: float) -> void:
-	velocity = direction * speed
+func move() -> void:
 	move_and_slide()
 
 # 创建碰撞盒
@@ -779,6 +1073,590 @@ func _create_collision_shape() -> void:
 	set_collision_layer(layer)
 	set_collision_mask(mask)
 	
+func is_entity_active() -> bool:
+	return data != null and data.runtime.is_alive()
+
+
+==== res:///core/ecs/systems/infrastructure/camera_system.gd ====
+class_name CameraSystem extends SystemBase
+
+# 相机配置
+var _camera: Camera2D
+var _target_entity: GameEntity
+var _smoothing_speed: float = 5.0
+
+# 🎯 动态获取分辨率
+var _viewport_size: Vector2 = Vector2.ZERO
+var _base_zoom: float = 2.2
+var _viewport_scale: float = 1.0  # 视口缩放比例
+var _design_resolution: Vector2 = Vector2(1080, 2340)  # 设计分辨率（竖屏）
+
+# 🎯 相机偏移配置（让玩家在屏幕中央偏下）
+var _vertical_offset_ratio: float = 0.15  # 向下偏移屏幕高度的15%
+var _vertical_offset: float = 0.0  # 计算后的实际偏移量
+
+# 缓存相机矩形，避免每帧重复计算
+var _cached_camera_rect: Rect2 = Rect2()
+var _camera_rect_dirty: bool = true
+
+func _initialize():
+	system_name = "CameraSystem"
+	system_type = "infrastructure"
+	
+	# 启用批处理优化
+	use_batch_processing = true
+	batch_size = 20
+	batch_threshold = 30
+	
+	# 初始化视口大小
+	_update_viewport_size()
+
+# 🎯 动态更新视口大小
+func _update_viewport_size():
+	var viewport = get_viewport()
+	if viewport:
+		_viewport_size = viewport.size
+		
+		# 🎯 计算相对于设计分辨率的缩放比例
+		# 保持宽高比，以较短边为基准
+		var scale_x = _viewport_size.x / _design_resolution.x
+		var scale_y = _viewport_size.y / _design_resolution.y
+		_viewport_scale = min(scale_x, scale_y)
+		
+		# 限制缩放范围
+		_viewport_scale = clamp(_viewport_scale, 0.5, 2.0)
+		
+		# 🎯 计算实际垂直偏移（像素）
+		_vertical_offset = _viewport_size.y * _vertical_offset_ratio
+		
+		print("📐 视口更新: ", _viewport_size, " 缩放: ", _viewport_scale, " 偏移: ", _vertical_offset)
+		_camera_rect_dirty = true  # 标记相机矩形需要重新计算
+	else:
+		# 回退到设计分辨率
+		_viewport_size = _design_resolution
+		_viewport_scale = 1.0
+		_vertical_offset = _design_resolution.y * _vertical_offset_ratio
+		_camera_rect_dirty = true
+
+func _should_process_entity(entity: GameEntity) -> bool:
+	# 🎯 你的判断条件是对的：
+	# 1. 实体存在
+	# 2. 实体激活状态
+	# 3. 实体活着（如果有生命值概念）
+	return entity != null and entity.is_entity_active()
+
+# 🎯 处理单个实体：更新其视锥状态
+func _process_entity(entity: GameEntity, _delta: float):
+	if not entity or not entity.data:
+		return
+	
+	# 更新相机矩形缓存
+	if _camera_rect_dirty:
+		_cached_camera_rect = _get_camera_rect()
+		_camera_rect_dirty = false
+	
+	# 判断实体是否在相机视锥内
+	var is_in_view = _is_point_in_camera_view(entity.global_position, _cached_camera_rect)
+	
+	# 设置视锥标志
+	entity.data.runtime.is_in_camera_view = is_in_view
+
+func _on_entity_registered(entity: GameEntity):
+	var entity_type = entity.data.config.entity_type
+	
+	if entity_type == "player":
+		print("📷 检测到玩家注册: ", entity.data.config.entity_name)
+		_target_entity = entity
+		_ensure_camera_exists()
+		snap_to_target()
+		print("✅ 相机开始跟随玩家")
+	
+	# 注册实体到系统（让父类管理）
+	super.register_entity(entity)
+
+func _on_entity_unregistered(entity: GameEntity):
+	if entity == _target_entity:
+		print("📷 目标实体注销，停止跟随: ", entity.data.config.entity_name)
+		_target_entity = null
+	
+	# 从系统注销实体
+	super.unregister_entity(entity)
+
+func _ensure_camera_exists():
+	if not _camera or not is_instance_valid(_camera):
+		_create_camera()
+	else:
+		if not _camera.is_current():
+			_camera.make_current()
+
+func _create_camera():
+	if _camera and is_instance_valid(_camera):
+		_camera.queue_free()
+	
+	_camera = Camera2D.new()
+	_camera.name = "MainCamera"
+	
+	# 🎯 动态计算缩放
+	# 基础缩放 * (1/视口缩放) 保持内容大小一致
+	var dynamic_zoom = _base_zoom * (1.0 / _viewport_scale)
+	_camera.zoom = Vector2(dynamic_zoom, dynamic_zoom)
+	
+	_camera.position_smoothing_enabled = true
+	_camera.position_smoothing_speed = _smoothing_speed
+	_camera.ignore_rotation = true
+	_camera.anchor_mode = Camera2D.ANCHOR_MODE_DRAG_CENTER  # 居中锚点
+	
+	# 🎯 移除边界限制
+	_camera.limit_left = -100000
+	_camera.limit_top = -100000
+	_camera.limit_right = 100000
+	_camera.limit_bottom = 100000
+	
+	var scene_root = get_tree().current_scene
+	if scene_root:
+		scene_root.add_child(_camera)
+		_camera.make_current()
+		
+		print("📷 自适应相机创建完成")
+		print("   动态缩放: ", dynamic_zoom)
+		print("   锚点模式: ", _camera.anchor_mode)
+		
+		_camera_rect_dirty = true  # 相机创建后需要更新矩形
+
+# 🎯 立即跳转到目标位置（带垂直偏移）
+func snap_to_target():
+	if not _target_entity or not _camera or not is_instance_valid(_target_entity):
+		return
+	
+	var target_pos = _target_entity.global_position
+	
+	# 🎯 关键：应用垂直偏移
+	# 玩家位置向上移动，让玩家在屏幕中偏下
+	var camera_target_pos = target_pos
+	camera_target_pos.y -= _vertical_offset / _camera.zoom.y  # 需要考虑相机缩放
+	
+	_camera.global_position = camera_target_pos
+	
+	# 标记相机矩形需要更新
+	_camera_rect_dirty = true
+	
+	print("🎯 相机定位调试:")
+	print("   玩家位置: ", target_pos)
+	print("   垂直偏移: ", _vertical_offset, "像素")
+	print("   考虑缩放后的偏移: ", _vertical_offset / _camera.zoom.y)
+	print("   相机目标位置: ", camera_target_pos)
+
+# 🎯 系统更新：平滑跟随目标（带垂直偏移）
+func process_system(delta: float):
+	if not enabled:
+		return
+	
+	# 1. 相机跟随目标
+	_follow_target(delta)
+	
+	# 2. 🎯 使用父类的分帧处理机制更新实体视锥状态
+	super.process_system(delta)
+
+func _follow_target(delta: float):
+	if not _target_entity or not _camera:
+		return
+	
+	if not is_instance_valid(_target_entity):
+		_target_entity = null
+		return
+	
+	var target_pos = _target_entity.global_position
+	
+	# 🎯 应用垂直偏移
+	var camera_target_pos = target_pos
+	camera_target_pos.y -= _vertical_offset / _camera.zoom.y
+	
+	# 平滑插值
+	var current_pos = _camera.global_position
+	var new_pos = current_pos.lerp(camera_target_pos, delta * _smoothing_speed)
+	
+	# 只有位置变化时才更新
+	if new_pos != current_pos:
+		_camera.global_position = new_pos
+		_camera_rect_dirty = true  # 位置变化需要更新相机矩形
+
+# 🎯 获取相机实际覆盖的矩形区域（考虑垂直偏移）
+func _get_camera_rect() -> Rect2:
+	if not _camera:
+		return Rect2()
+	
+	var camera_pos = _camera.global_position
+	var scaled_viewport = _viewport_size / _camera.zoom
+	
+	# 🎯 对于居中锚点，考虑垂直偏移
+	# 实际相机矩形应该向上偏移，因为相机位置已经向下调整了
+	var actual_camera_pos = camera_pos
+	actual_camera_pos.y += _vertical_offset / _camera.zoom.y  # 反向补偿偏移
+	
+	return Rect2(actual_camera_pos - scaled_viewport * 0.5, scaled_viewport)
+
+# 🎯 判断点是否在相机视锥内
+func _is_point_in_camera_view(point: Vector2, camera_rect: Rect2) -> bool:
+	# 扩展判定区域（给物理系统一些缓冲）
+	var extended_rect = camera_rect.grow(200.0)  # 200像素缓冲
+	return extended_rect.has_point(point)
+
+# 🎯 设置垂直偏移比例
+func set_vertical_offset_ratio(ratio: float):
+	_vertical_offset_ratio = clamp(ratio, 0.0, 0.4)  # 限制在0-40%之间
+	_vertical_offset = _viewport_size.y * _vertical_offset_ratio
+	_camera_rect_dirty = true  # 偏移变化需要更新相机矩形
+	print("📏 垂直偏移比例设置为: ", _vertical_offset_ratio, " (", _vertical_offset, "像素)")
+
+# 🎯 设置相机缩放
+func set_zoom(zoom_level: float):
+	if _camera:
+		_camera.zoom = Vector2(zoom_level, zoom_level)
+		_camera_rect_dirty = true  # 缩放变化需要更新相机矩形
+		print("🔍 相机缩放设置为: ", zoom_level)
+
+# 🎯 获取当前相机信息
+func get_camera_info() -> Dictionary:
+	if not _camera:
+		return {}
+	
+	var target_pos = _target_entity.global_position if _target_entity and is_instance_valid(_target_entity) else Vector2.ZERO
+	var scaled_viewport = _viewport_size / _camera.zoom
+	
+	# 确保相机矩形是最新的
+	if _camera_rect_dirty:
+		_cached_camera_rect = _get_camera_rect()
+		_camera_rect_dirty = false
+	
+	return {
+		"position": _camera.global_position,
+		"zoom": _camera.zoom,
+		"target": _target_entity.data.config.entity_name if _target_entity and is_instance_valid(_target_entity) else "无",
+		"target_position": target_pos,
+		"viewport_size": _viewport_size,
+		"scaled_viewport": scaled_viewport,
+		"design_resolution": _design_resolution,
+		"viewport_scale": _viewport_scale,
+		"vertical_offset": _vertical_offset,
+		"vertical_offset_ratio": _vertical_offset_ratio,
+		"camera_rect": _cached_camera_rect,
+		"entities_in_system": entities.size(),
+		"is_active": _camera.is_current()
+	}
+
+func force_update():
+	if _target_entity and _camera:
+		snap_to_target()
+		_camera_rect_dirty = true
+		print("🔄 强制更新相机位置")
+
+func get_system_info() -> Dictionary:
+	var info = super.get_system_info()
+	var camera_info = get_camera_info()
+	info["camera"] = camera_info
+	return info
+
+
+==== res:///core/ecs/systems/render/health_bar_system.gd ====
+# res://core/ecs/systems/render/health_bar_system.gd
+class_name HealthBarSystem
+extends SystemBase
+
+# 血条数据类
+class HealthBarData:
+	var entity: GameEntity
+	var world_position: Vector2
+	var health_ratio: float
+	var is_visible: bool
+	var entity_type: String
+	
+	func _init(entity_ref: GameEntity):
+		entity = entity_ref
+		update_data()
+	
+	func update_data():
+		if is_instance_valid(entity) and entity.data:
+			world_position = entity.data.get_position()
+			health_ratio = entity.data.get_health() / entity.data.get_max_health()
+			is_visible = entity.data.is_alive() and entity.data.runtime.is_active
+			entity_type = entity.data.config.entity_type
+
+var _health_bars: Array[HealthBarData] = []
+
+func _initialize():
+	system_name = "HealthBarSystem"
+	system_type = "render"
+	#update_priority = 95  # 在精灵之后，UI之前
+	
+	# 🎯 修复：使用Y Sort而不是CanvasLayer
+	z_index = 90  # 设置较高的Z Index
+	z_as_relative = false
+	
+	print("HealthBarSystem 初始化完成")
+
+# 只处理需要血条的实体
+func _should_process_entity(entity: GameEntity) -> bool:
+	return entity.data.config.entity_type in ["player", "monster", "boss"]
+
+func _process_entity(_entity: GameEntity, _delta: float):
+	# 这个系统不按实体处理，而是批量绘制
+	pass
+
+func _on_entity_registered(entity: GameEntity):
+	if _should_process_entity(entity):
+		var health_bar = HealthBarData.new(entity)
+		_health_bars.append(health_bar)
+		print("✅ 血条系统注册实体: ", entity.data.get_display_name())
+
+func _on_entity_unregistered(entity: GameEntity):
+	for i in range(_health_bars.size() - 1, -1, -1):
+		if _health_bars[i].entity == entity:
+			_health_bars.remove_at(i)
+			print("🗑️ 血条系统移除实体: ", entity.data.get_display_name())
+			break
+
+# 每帧更新血条数据并重绘
+func process_system(_delta: float):
+	if not enabled:
+		return
+	
+	# 更新所有血条数据
+	for health_bar in _health_bars:
+		health_bar.update_data()
+	
+	# 请求重绘
+	queue_redraw()
+
+# 批量绘制所有血条
+func _draw():
+	for health_bar in _health_bars:
+		if health_bar.is_visible:
+			_draw_single_health_bar(health_bar)
+
+func _draw_single_health_bar(health_bar: HealthBarData):
+	var screen_pos = health_bar.world_position
+		
+	# 血条在头顶偏移
+	var y_offset = -50
+	if health_bar.entity_type == "player":
+		y_offset = -60
+	elif health_bar.entity_type == "monster":
+		y_offset = -40
+	
+	screen_pos.y += y_offset
+	
+	# 血条尺寸
+	var width = 50
+	var height = 6
+	var border = 1
+	
+	# 背景（黑色边框）
+	draw_rect(Rect2(
+		screen_pos.x - width/2.0 - border, 
+		screen_pos.y - border, 
+		width + border*2, 
+		height + border*2
+	), Color.BLACK)
+	
+	# 背景（灰色底）
+	draw_rect(Rect2(
+		screen_pos.x - width/2.0, 
+		screen_pos.y, 
+		width, 
+		height
+	), Color.DARK_GRAY)
+	
+	# 血量（颜色渐变）
+	var health_width = width * health_bar.health_ratio
+	var health_color = _get_health_color(health_bar.health_ratio, health_bar.entity_type)
+	
+	if health_width > 0:
+		draw_rect(Rect2(
+			screen_pos.x - width/2.0, 
+			screen_pos.y, 
+			health_width, 
+			height
+		), health_color)
+
+func _get_health_color(ratio: float, entity_type: String) -> Color:
+	# 传奇风格颜色渐变
+	if entity_type == "player":
+		# 玩家血条：绿→黄→红
+		if ratio > 0.6:
+			return Color.GREEN
+		elif ratio > 0.3:
+			return Color.YELLOW
+		else:
+			return Color.RED
+	else:
+		# 怪物血条：红→橙→黄
+		if ratio > 0.6:
+			return Color.RED
+		elif ratio > 0.3:
+			return Color.ORANGE
+		else:
+			return Color.YELLOW
+
+# 调试信息
+func get_system_info() -> Dictionary:
+	var info = super.get_system_info()
+	info["health_bar_count"] = _health_bars.size()
+	return info
+
+
+==== res:///core/ecs/systems/render/name_label_system.gd ====
+# res://core/ecs/systems/render/name_label_system.gd
+class_name NameLabelSystem
+extends SystemBase
+
+# 名字数据类
+class NameLabelData:
+	var entity: GameEntity
+	var world_position: Vector2
+	var is_visible: bool
+	var entity_name: String
+	var entity_type: String
+	var should_show_name: bool  # 🆕 是否应该显示名字
+	
+	func _init(entity_ref: GameEntity):
+		entity = entity_ref
+		update_data()
+	
+	func update_data():
+		if is_instance_valid(entity) and entity.data:
+			var runtime = entity.data.runtime
+			var config = entity.data.config
+			var base_name = runtime.nickname if runtime.nickname != "" else config.entity_name
+
+			world_position = entity.data.get_position()
+			is_visible = entity.data.is_alive() and entity.data.runtime.is_active
+			entity_name = base_name
+			entity_type = entity.data.config.entity_type
+			
+			# 🆕 判断是否显示名字：BOSS始终显示，其他实体受伤才显示
+			# BOSS和玩家始终显示，其他实体受伤才显示
+			if entity_type == "boss" or entity_type == "player":
+				should_show_name = true  # BOSS和玩家始终显示
+			else:
+				# 其他实体：受伤（当前血量 < 最大血量）才显示
+				var current_health = entity.data.get_health()
+				var max_health = entity.data.get_max_health()
+				should_show_name = current_health < max_health
+				
+
+var _name_labels: Array[NameLabelData] = []
+var _font: Font
+
+func _initialize():
+	system_name = "NameLabelSystem"
+	system_type = "render"
+	#update_priority = 96
+	
+	# 创建字体
+	_font = _create_font()
+	
+	# 🎯 修复：使用Y Sort而不是CanvasLayer
+	z_index = 90  # 设置较高的Z Index
+	z_as_relative = false
+	
+	print("NameLabelSystem 初始化完成")
+
+func _create_font() -> Font:
+	# Godot 4.x 最简单的方法
+	return ThemeDB.fallback_font
+
+func _should_process_entity(entity: GameEntity) -> bool:
+	return entity.data.config.entity_type in ["player", "monster", "npc", "boss"]
+
+func _on_entity_registered(entity: GameEntity):
+	if _should_process_entity(entity):
+		var name_label = NameLabelData.new(entity)
+		_name_labels.append(name_label)
+		print("✅ 名字系统注册实体: ", entity.data.get_display_name())
+
+func _on_entity_unregistered(entity: GameEntity):
+	for i in range(_name_labels.size() - 1, -1, -1):
+		if _name_labels[i].entity == entity:
+			_name_labels.remove_at(i)
+			print("🗑️ 名字系统移除实体: ", entity.data.get_display_name())
+			break
+
+func process_system(_delta: float):
+	if not enabled:
+		return
+	
+	# 更新所有名字数据
+	for name_label in _name_labels:
+		name_label.update_data()
+	
+	queue_redraw()
+
+func _draw():
+	for name_label in _name_labels:
+		if name_label.is_visible and name_label.should_show_name:
+			_draw_single_name_label(name_label)
+
+func _draw_single_name_label(name_label: NameLabelData):
+	var screen_pos = name_label.world_position
+	
+	var health_bar_y_offset = -60 if name_label.entity_type == "player" else -40
+	
+	# 🎯 名字在血条下方（血条高度6 + 间距）
+	screen_pos.y += health_bar_y_offset + 30  # 血条下方10像素
+	
+	var font_size = 12
+	var text = name_label.entity_name
+	var health_bar_width = 50
+	
+	# 使用血条宽度居中
+	var text_pos = Vector2(
+		screen_pos.x - health_bar_width / 2.0,
+		screen_pos.y
+	)
+	
+	var name_color = Color.RED if name_label.entity_type == "boss" else Color.WHITE
+	
+	# 黑色描边
+	draw_string(_font, text_pos + Vector2(-1, 0), text, HORIZONTAL_ALIGNMENT_CENTER, health_bar_width, font_size, Color.BLACK)
+	draw_string(_font, text_pos + Vector2(1, 0), text, HORIZONTAL_ALIGNMENT_CENTER, health_bar_width, font_size, Color.BLACK)
+	draw_string(_font, text_pos + Vector2(0, -1), text, HORIZONTAL_ALIGNMENT_CENTER, health_bar_width, font_size, Color.BLACK)
+	draw_string(_font, text_pos + Vector2(0, 1), text, HORIZONTAL_ALIGNMENT_CENTER, health_bar_width, font_size, Color.BLACK)
+	
+	# 主体文字
+	draw_string(_font, text_pos, text, HORIZONTAL_ALIGNMENT_CENTER, health_bar_width, font_size, name_color)
+
+func _draw_name_with_outline(txt_name: String, pos: Vector2, text_color: Color, font_size: int):
+	var outline_offset = 1
+	
+	# 黑色描边
+	draw_string(_font, pos + Vector2(-outline_offset, 0), txt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.BLACK)
+	draw_string(_font, pos + Vector2(outline_offset, 0), txt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.BLACK)
+	draw_string(_font, pos + Vector2(0, -outline_offset), txt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.BLACK)
+	draw_string(_font, pos + Vector2(0, outline_offset), txt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.BLACK)
+	
+	# 主体文字
+	draw_string(_font, pos, txt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+
+# 🆕 强制显示某个实体的名字（用于特殊情况下）
+func force_show_name(entity: GameEntity, show_name: bool = true):
+	for name_label in _name_labels:
+		if name_label.entity == entity:
+			name_label.should_show_name = show_name
+			break
+
+# 调试信息
+func get_system_info() -> Dictionary:
+	var info = super.get_system_info()
+	info["name_label_count"] = _name_labels.size()
+	
+	# 统计显示中的名字数量
+	var showing_count = 0
+	for name_label in _name_labels:
+		if name_label.should_show_name:
+			showing_count += 1
+	info["showing_name_count"] = showing_count
+	
+	return info
 
 
 ==== res:///core/ecs/systems/system_base.gd ====
@@ -1027,6 +1905,272 @@ func _list_all_gd_files(dir: String) -> PackedStringArray:
 	return list
 
 
+==== res:///global/data/gameplay_session_data..gd ====
+# 新建 gameplay_session_data.gd
+class_name GameplaySessionData extends Resource
+
+# 战斗相关状态
+var auto_battle: bool = false
+var current_battle_mode: int = 0  # 使用BattleMode枚举
+var last_combat_time: float = 0.0
+var preferred_skills: Array[String] = []
+
+# 地图探索状态
+var discovered_areas: Array[String] = []
+var current_quests: Array[String] = []
+
+# 界面状态
+var ui_layout_preferences: Dictionary = {}
+var quick_slot_settings: Dictionary = {}
+
+func serialize() -> Dictionary:
+	return {
+		"auto_battle": auto_battle,
+		"current_battle_mode": current_battle_mode,
+		"discovered_areas": discovered_areas
+	}
+
+func deserialize(data: Dictionary):
+	auto_battle = data.get("auto_battle", false)
+	current_battle_mode = data.get("current_battle_mode", 0)
+	discovered_areas = data.get("discovered_areas", [])
+
+
+==== res:///global/data/player_skill_data.gd ====
+# res://autoload/data/player_skill_data.gd
+class_name PlayerSkillData extends Resource
+
+# 🎯 纯数据容器，没有任何逻辑方法
+var skills: Dictionary = {}  # skill_id -> {"current_level": int, "experience": int, "last_used_time": float}
+
+# 🎯 只有序列化方法（数据转换，不算业务逻辑）
+func serialize() -> Dictionary:
+	return skills.duplicate(true)
+
+func deserialize(data: Dictionary):
+	skills = data.duplicate(true)
+
+
+==== res:///global/data/scene_navigation_data.gd ====
+# scene_navigation_data.gd
+class_name SceneNavigationData extends Resource
+
+# 🎯 玩家真实位置（持久化）
+var persistent_position: Vector2 = Vector2.ZERO 	# 真实游戏位置
+var persistent_scene_id: String = "map_001"     	# 真实所在场景id
+
+# 🎯 场景传送数据（临时）
+var transition_data: Dictionary = {
+	"from_scene_id": "",           # 来源场景
+	"from_exit_id": "",            # 来源出口ID  
+	"to_scene_id": "",             # 目标场景
+	"to_spawn_id": "",             # 目标出生点ID
+	"transition_type": "normal"    # 传送类型
+}
+
+# 🎯 序列化（只存真实位置）
+func serialize() -> Dictionary:
+	return {
+		"persistent_scene_id": persistent_scene_id,
+		"persistent_position": {"x": persistent_position.x, "y": persistent_position.y}
+	}
+
+# 🎯 反序列化
+func deserialize(data: Dictionary):
+	persistent_scene_id = data.get("persistent_scene_id", "")
+	var pos_data = data.get("persistent_position", {})
+	persistent_position = Vector2(pos_data.get("x", 0), pos_data.get("y", 0))
+
+# 🎯 设置传送信息
+func set_transition(from_scene: String, from_exit: String, to_scene: String, to_spawn: String, type: String = "normal"):
+	transition_data = {
+		"from_scene_id": from_scene,
+		"from_exit_id": from_exit,
+		"to_scene_id": to_scene, 
+		"to_spawn_id": to_spawn,
+		"transition_type": type
+	}
+
+# 🎯 获取目标出生点（从地图配置读取）
+func get_target_spawn_position() -> Vector2:
+	var spawn_id = transition_data.get("to_spawn_id", "")
+	var scene_id = transition_data.get("to_scene_id", "")
+	
+	# 🎯 从地图配置获取出生点
+	var map_config = Game.config_manager.map_templates.get(scene_id, {})
+	var spawn_points = map_config.get("spawn_points", {})
+	
+	return spawn_points.get(spawn_id, Vector2(300, 300))
+
+# 🎯 更新真实位置（退出游戏时调用）
+func update_persistent_position(scene_id: String, position: Vector2):
+	persistent_scene_id = scene_id
+	persistent_position = position
+
+
+==== res:///global/data/user_profile_data.gd ====
+# user_profile_data.gd
+class_name UserProfileData extends Resource
+
+var user_id: int = 0
+var zone_id: int = 0
+
+var level: int = 1
+var experience: int = 0
+var nickname: String = "未知玩家"
+var last_activity: float = 0
+var total_play_time: float = 0
+
+# 新增字段
+var gender: int = 0  # 0=未选择 1=男 2=女
+var job: int = 0     # 0=未选择 1=战士 2=法师 3=道士  
+var created_at: float = 0  # 角色创建时间
+
+func deserialize(data: Dictionary) -> void:
+	if data.has("user_id"): user_id = data["user_id"]
+	if data.has("zone_id"): zone_id = data["zone_id"]
+	if data.has("level"): level = data["level"]
+	if data.has("experience"): experience = data["experience"]
+	if data.has("nickname"): nickname = data["nickname"]
+	if data.has("last_activity"): last_activity = data["last_activity"]
+	if data.has("total_play_time"): total_play_time = data["total_play_time"]
+	
+	# 新增字段
+	if data.has("gender"): gender = data["gender"]
+	if data.has("job"): job = data["job"]
+	if data.has("created_at"): created_at = data["created_at"]
+
+func serialize() -> Dictionary:
+	return {
+		"user_id": user_id,
+		"zone_id": zone_id,
+		"level": level,
+		"experience": experience,
+		"nickname": nickname,
+		"last_activity": last_activity,
+		"total_play_time": total_play_time,
+		"gender": gender,
+		"job": job,
+		"created_at": created_at
+	}
+
+# 新增工具方法
+func get_job_name() -> String:
+	match job:
+		1: return "战士"
+		2: return "法师"
+		3: return "道士"
+		_: return "未选择"
+
+func get_gender_name() -> String:
+	match gender:
+		1: return "男"
+		2: return "女"
+		_: return "未选择"
+
+func is_new_character() -> bool:
+	# 3天内创建的角色算新角色
+	var three_days_ago = Time.get_unix_time_from_system() - (3 * 24 * 60 * 60)
+	return created_at > three_days_ago
+
+func get_character_age_days() -> int:
+	# 角色创建了多少天
+	return int((Time.get_unix_time_from_system() - created_at) / (24 * 60 * 60))
+
+func set_job(new_job: int) -> void:
+	job = new_job
+
+func set_gender(new_gender: int) -> void:
+	gender = new_gender
+
+
+==== res:///global/entity_registry.gd ====
+# res://core/ecs/world/entity_registry.gd
+# 单例
+# 类名：EntityRegistry
+# 作用：实体注册表，管理所有活跃实体
+# 职责：
+#   - 注册和注销实体到ECS系统
+#   - 提供实体查询功能
+#   - 管理实体生命周期
+extends Node
+
+
+# 实体存储
+var _entities: Dictionary = {}  # entity_id -> GameEntity
+var _entities_by_type: Dictionary = {}  # entity_type -> Array[GameEntity]
+
+# 注册实体到ECS系统
+func register_entity(entity: GameEntity) -> bool:
+	var entity_data = entity.get_entity_data()
+	var entity_id = entity_data.config.entity_id
+	var entity_type = entity_data.config.entity_type
+	
+	if _entities.has(entity_id):
+		push_error("实体已存在: " + entity_id)
+		return false
+	
+	# 存储实体
+	_entities[entity_id] = entity
+	
+	# 按类型分类
+	if not _entities_by_type.has(entity_type):
+		_entities_by_type[entity_type] = []
+	_entities_by_type[entity_type].append(entity)
+	
+	# 注册到所有系统
+	SystemManager.register_entity_to_systems(entity)
+	
+	print("✅ 实体注册成功: %s (%s)" % [entity_data.config.entity_name, entity_id])
+	return true
+
+# 注销实体
+func unregister_entity(entity: GameEntity) -> bool:
+	var entity_data = entity.get_entity_data()
+	var entity_id = entity_data.config.entity_id
+	var entity_type = entity_data.config.entity_type
+	
+	if not _entities.has(entity_id):
+		push_error("实体不存在: " + entity_id)
+		return false
+	
+	# 从所有系统注销
+	SystemManager.unregister_entity_from_systems(entity)
+	
+	# 从存储中移除
+	_entities.erase(entity_id)
+	if _entities_by_type.has(entity_type):
+		_entities_by_type[entity_type].erase(entity)
+	
+	print("🗑️ 实体注销: %s (%s)" % [entity_data.config.entity_name, entity_id])
+	return true
+
+# 实体查询
+func get_entity(entity_id: String) -> GameEntity:
+	return _entities.get(entity_id)
+
+func get_entities_by_type(entity_type: String) -> Array:
+	return _entities_by_type.get(entity_type, []).duplicate()
+
+func get_all_entities() -> Array:
+	return _entities.values()
+
+# 获取实体数量统计
+func get_entity_stats() -> Dictionary:
+	var stats = {"total": _entities.size()}
+	for entity_type in _entities_by_type:
+		stats[entity_type] = _entities_by_type[entity_type].size()
+	return stats
+
+# 调试功能
+func print_entity_stats():
+	var stats = get_entity_stats()
+	print("=== 实体统计 ===")
+	print("总实体数: ", stats.total)
+	for entity_type in _entities_by_type:
+		print("  %s: %d" % [entity_type, _entities_by_type[entity_type].size()])
+
+
 ==== res:///global/game.gd ====
 extends Node
 
@@ -1036,15 +2180,380 @@ const SHARED_CIRCLE_108 = preload("uid://cgqk4mwv7hg0i")
 
 # 默认系统注册配置
 var system_registrations: Array = [
-	# 核心系统
-	#{
-		#"script": load("res://core/ecs/systems/infrastructure/touch_input_system.gd"),
-		#"group": "infrastructure",
-		#"name": "TouchInputSystem ",
-		#"needs_scene_tree": true,  # 🎯 需要场景树来处理输入事件
-		#"priority": 1  # 🎯 最高优先级
-	#},
+	 {
+		"script": load("res://core/ecs/systems/infrastructure/touch_input_system.gd"),
+		"group": "infrastructure",
+		"name": "TouchInputSystem",
+		"needs_scene_tree": true, 
+		"priority": 1  # 输入系统优先级最高
+	},
+	{
+		"script": load("res://core/ecs/systems/core/movement_system.gd"),
+		"group": "core",
+		"name": "MovementSystem",
+		"needs_scene_tree": false, 
+		"priority": 10  
+	},
+	{
+		"script": load("res://core/ecs/systems/infrastructure/camera_system.gd"),
+		"group": "infrastructure",
+		"name": "CameraSystem",
+		"needs_scene_tree": true, 
+		"priority": 90  
+	},
+	{
+		"script": load("res://core/ecs/systems/render/health_bar_system.gd"),
+		"group": "infrastructure",
+		"name": "HealthBarSystem",
+		"needs_scene_tree": true, 
+		"priority": 95  
+	},
+	{
+		"script": load("res://core/ecs/systems/render/name_label_system.gd"),
+		"group": "infrastructure",
+		"name": "NameLabelSystem",
+		"needs_scene_tree": true, 
+		"priority": 96 
+	},
 ]
+
+## 单例 Game
+enum GameMode {
+	OFFLINE = 1,
+	ONLINE = 2
+}
+
+var game_mode: GameMode = GameMode.OFFLINE
+
+var _save_load_manager:SaveLoadManager = SaveLoadManager.new()
+var has_valid_save: bool = false
+
+var config_manager:ConfigManager
+var data:DataManager
+
+@onready var color_rect: ColorRect = $TransitionCanvas/ColorRect
+
+func _init() -> void:
+	data = DataManager.new()
+	config_manager = ConfigManager.new()
+	
+	
+func _ready():
+	print("🎮 游戏初始化完成 - 模式: %s" % ("联机" if game_mode == GameMode.ONLINE else "单机"))
+	load_data()
+
+func save_data() -> bool:
+	# 从System同步到data
+	
+	var game_data := get_save_data()
+	var success = _save_load_manager.save_game(game_data)
+	has_valid_save = success
+	return success
+	
+func load_data() -> bool:
+	var getted_data = _save_load_manager.load_game()
+	has_valid_save = not getted_data.is_empty()
+
+	if has_valid_save:
+		apply_loaded_data(getted_data)
+	
+	return has_valid_save
+
+func get_save_data() -> Dictionary:
+	return {
+		"data":data.to_dict(),
+		"timestamp": Time.get_unix_time_from_system()
+	}
+
+func apply_loaded_data(getted_data:Dictionary) -> void:
+	print(getted_data)
+	data.from_dict(getted_data["data"])
+		
+# ==================== 公开接口 ====================
+
+# UI场景切换（简单版）
+func change_ui_scene(scene_path: String, transition_params: Dictionary = {}) -> void:
+	print("🖥️ UI场景切换: ", scene_path)
+	
+	var duration = transition_params.get("duration", 0.3)
+	
+	# 1. 暂停 + 淡入
+	get_tree().paused = true
+	await _fade_in(duration)
+	
+	# 2. 直接切换场景（UI场景没有ECS实体）
+	get_tree().change_scene_to_file(scene_path)
+	await get_tree().tree_changed
+	
+	# 3. 恢复 + 淡出
+	get_tree().paused = false
+	await _fade_out(duration)
+	
+	print("✅ UI场景切换完成")
+
+# 游戏场景切换（完整版）
+func change_game_scene(scene_path: String, game_params: Dictionary = {}) -> void:
+	var duration = game_params.get("transition_duration", 0.2)
+	
+	# 1. 暂停 + 淡入
+	get_tree().paused = true
+	await _fade_in(duration)
+	
+	# 4. 切换场景
+	get_tree().change_scene_to_file(scene_path)
+	await get_tree().tree_changed
+	
+	# 8. 恢复 + 淡出
+	get_tree().paused = false
+	await _fade_out(duration)
+	
+	print("✅ 游戏场景切换完成")
+
+# ==================== 内部方法 ====================
+# 淡入过渡
+func _fade_in(duration: float) -> void:
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.tween_property(color_rect, "color:a", 1.0, duration)
+	await tween.finished
+
+# 淡出过渡
+func _fade_out(duration: float) -> void:
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.tween_property(color_rect, "color:a", 0.0, duration)
+	await tween.finished
+
+
+==== res:///global/managers/config_manager.gd ====
+extends RefCounted
+class_name ConfigManager
+
+const PATH :String = "res://database/"
+const LOADKEY:String = "E3967DFBABC33E7A945DD46E2816E5"
+
+var file_list:Array = [
+		"item_templates",
+		"monster_templates",
+		"skill_templates",
+		"map_templates",
+		"player_templates",
+		"skill_levels_templates",
+	]
+	
+var item_templates:Dictionary = {}
+var monster_templates:Dictionary = {}
+var skill_templates:Dictionary = {}
+var map_templates:Dictionary = {}
+var player_templates:Dictionary = {}
+var skill_levels_templates:Dictionary = {}
+
+func _init() -> void:
+	for file_name in file_list:
+		_load_data(file_name)
+	
+func _load_data(file_name:String) -> void:
+	var _path:String = PATH + file_name + ".json"
+	var file := FileAccess.open_encrypted_with_pass(_path,FileAccess.READ,LOADKEY)
+	if file:
+		var content := file.get_as_text()
+		file.close()
+		self[file_name] = _array_data_to_json(JSON.parse_string(content))
+		
+func _array_data_to_json(array:Array) -> Dictionary:
+	var json_data:Dictionary = {}
+	for data in array:
+		json_data[data.id] = data
+	return json_data
+
+
+==== res:///global/managers/data_manager.gd ====
+# data_manager.gd
+class_name DataManager extends RefCounted
+
+# 所有数据类在这里统一管理
+#var user: UserData
+var profile: UserProfileData
+#var zone: ZoneData  
+#var chat: ChatData
+#var mail_list: MailListData  # 改为邮件列表
+#var vip: VipData
+#var session: SessionData
+#var settings: GameSettings
+#var wallet:WalletData
+#var task_list:TaskListData
+#var inventory:NetInventoryData
+var player_skills: PlayerSkillData  # 🆕 纯数据容器
+
+# 🎯 场景导航数据
+var scene_navigation: SceneNavigationData
+var gameplay_session_data: GameplaySessionData
+# 🎯 游戏设置
+#var settings: GameSettings
+
+# 聊天室
+var chat_messages: Dictionary = {}  # channel_type -> Array[ChatMessageData]
+var current_channel: int = 1  # 当前选中的频道
+
+func _init():
+	#user = UserData.new()
+	profile = UserProfileData.new()
+	#zone = ZoneData.new()
+	#chat = ChatData.new()
+	#mail_list = MailListData.new()
+	#vip = VipData.new()
+	#session = SessionData.new()
+	#settings = GameSettings.new()
+	#wallet = WalletData.new()
+	#task_list = TaskListData.new()
+	#inventory = NetInventoryData.new()
+	scene_navigation = SceneNavigationData.new()
+	gameplay_session_data = GameplaySessionData.new()
+	player_skills = PlayerSkillData.new()
+
+func to_dict() -> Dictionary:
+	return {
+		#"user":user.to_dict(),
+		"profile":profile.serialize(),
+		"scene_navigation":scene_navigation.serialize(),
+		"gameplay_session_data":gameplay_session_data.serialize(),
+		"player_skills": player_skills.serialize()
+	}
+
+func from_dict(save_data:Dictionary) -> void:
+	if save_data.is_empty(): return
+	#if save_data.has("user"): user.update_from_dict(save_data["user"])
+	if save_data.has("profile"): profile.deserialize(save_data["profile"])
+	if save_data.has("scene_navigation"): scene_navigation.deserialize(save_data["scene_navigation"])
+	if save_data.has("gameplay_session_data"): gameplay_session_data.deserialize(save_data["gameplay_session_data"])
+	if save_data.has("player_skills"): player_skills.deserialize(save_data["player_skills"])
+
+## 🆕 初始化新游戏数据
+func initialize_new_game():
+	profile.level = 1
+	profile.experience = 0
+	profile.nickname = "新手玩家"
+	profile.gender = 0
+	profile.job = 0
+	profile.created_at = Time.get_unix_time_from_system()
+	
+	# 初始化场景导航数据
+	scene_navigation.persistent_scene_id = "map_001"
+	scene_navigation.persistent_position = Vector2(300, 300)
+	
+	print("DataManager: 新游戏数据初始化完成")
+
+
+==== res:///global/managers/save_load_manager.gd ====
+class_name SaveLoadManager extends RefCounted
+
+const SAVE_DIR = "user://saves/"
+const POINTER_FILE = "user://save_pointer.dat"
+const MAX_SAVES = 5
+const SECRET_KEY :String = "Gdot"
+
+var current_pointer :int = 0
+var pointer_hash
+
+func _init() -> void:
+	# 确保存档目录存在
+	verify_save_directoty(SAVE_DIR)
+	# 加载当前指针
+	load_pointer()
+
+#验证目录是否合法
+func verify_save_directoty(path:String) -> void:
+	DirAccess.make_dir_absolute(path)
+	
+func save_game(data: Dictionary) -> bool:
+	# 创建新的存档文件
+	var new_save_id = (current_pointer + 1) % MAX_SAVES
+	var save_path = SAVE_DIR + "save_" + str(new_save_id) + ".dat"
+	
+	# 密钥
+	var _s_key :String = OS.get_unique_id() + SECRET_KEY
+	# 写入新的存档文件
+	var file := FileAccess.open_encrypted_with_pass(save_path,FileAccess.WRITE,_s_key)
+	if file:
+		# Todo
+		var json_string := JSON.stringify(data)
+		file.store_string(json_string)
+		file.close()
+		
+		# 更新指针
+		# 使用Crypto类计算SHA256哈希值
+		pointer_hash = json_string.hash()
+		current_pointer = new_save_id
+		save_pointer()
+		return true
+	else:
+		print("Error saving game: ")
+		return false
+
+func load_game() -> Dictionary:
+	var data = {}
+	
+	# 从最新的存档开始尝试加载
+	for i in range(MAX_SAVES):
+		var save_id = (current_pointer - i + MAX_SAVES) % MAX_SAVES
+		var save_path = SAVE_DIR + "save_" + str(save_id) + ".dat"
+		
+		# 密钥
+		var _s_key :String = OS.get_unique_id() + SECRET_KEY
+		
+		if FileAccess.file_exists(save_path):
+			var file :FileAccess = FileAccess.open_encrypted_with_pass(save_path,FileAccess.READ,_s_key)
+			if file:
+				var content := file.get_as_text()
+				file.close()
+				if content.hash() == pointer_hash:
+					data = JSON.parse_string(content)
+					return data
+	
+	print("No valid save file found")
+	return data
+
+func save_pointer():
+	# 写入新的存档文件
+	var file := FileAccess.open_encrypted_with_pass(POINTER_FILE,FileAccess.WRITE,OS.get_unique_id())
+	if file:
+		# Todo
+		var json_string := JSON.stringify({"current_pointer":current_pointer,"pointer_hash":pointer_hash})
+		file.store_string(json_string)
+		file.close()
+	else:
+		print("Error saving pointer")
+
+func load_pointer():
+	if FileAccess.file_exists(POINTER_FILE):
+		var file :FileAccess = FileAccess.open_encrypted_with_pass(POINTER_FILE,FileAccess.READ,OS.get_unique_id())
+		if file:
+			var content := file.get_as_text()
+			file.close()
+			var data :Dictionary = JSON.parse_string(content)
+			if data.has("current_pointer"):
+				current_pointer = data.current_pointer
+			if data.has("pointer_hash"):
+				pointer_hash = data.pointer_hash
+		
+func clear_all_saves():
+	var dir = DirAccess.open(SAVE_DIR)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir():
+				print("发现目录：" + file_name)
+			else:
+				print("发现文件：" + file_name)
+				dir.remove(SAVE_DIR + file_name)
+			file_name = dir.get_next()
+	else:
+		print("尝试访问路径时出错。")
+	
+	# 重置指针
+	current_pointer = 0
+	save_pointer()
 
 
 ==== res:///global/system_manager.gd ====
@@ -1080,6 +2589,8 @@ var _check_frame:int = 300
 
 # 就绪函数
 func _ready():
+	if not Game or not Game.is_node_ready():
+		await Game.ready
 	print("SystemManager 初始化完成")
 	_setup_default_systems()
 	
@@ -1089,10 +2600,10 @@ func _process(delta: float):
 	_update_systems(delta)
 	
 	# 每60帧输出一次性能报告并重置
-	if _performance_counter >= _check_frame:
-		_print_performance_report()
-		_reset_performance_counters()
-		_performance_counter = 0
+	#if _performance_counter >= _check_frame:
+		#_print_performance_report()
+		#_reset_performance_counters()
+		#_performance_counter = 0
 
 # 设置默认系统
 func _setup_default_systems():
@@ -1336,3 +2847,60 @@ func register_entity_to_systems(entity):
 func unregister_entity_from_systems(entity):
 	for system in _system_instances:
 		system.unregister_entity(entity)
+
+
+==== res:///scenes/test/test_ecs.gd ====
+# test_ecs_scene.gd
+extends Node2D
+
+func _ready():
+	print("=== GECS 框架集成测试 ===")
+	_test_entity_creation()
+	_test_systems()
+
+func _test_entity_creation():
+	print("\n1. 测试实体工厂...")
+	
+	# 创建玩家实体
+	var player = EntityFactory.create_player_from_profile(Vector2(100, 200), self)
+	if player:
+		print("✅ 玩家创建成功:", player.data.config.get_display_name())
+		print("   位置:", player.position)
+		print("   生命值:", player.data.get_health(), "/", player.data.get_max_health())
+	
+	# 创建怪物实体
+	var monster = EntityFactory.create_monster("1001", Vector2(300, 200), self)
+	if monster:
+		print("✅ 怪物创建成功:", monster.data.config.entity_name)
+
+func _test_systems():
+	print("\n2. 测试System集成...")
+	
+	# 检查SystemManager状态
+	var system_manager = SystemManager
+	print("   活跃系统:", system_manager._get_active_system_count())
+	
+	# 测试EntityRegistry
+	print("\n3. 测试EntityRegistry...")
+	var registry = EntityRegistry
+	registry.print_entity_stats()
+
+
+==== res:///scenes/ui/startup/startup.gd ====
+extends Control
+
+
+func _on_button_2_pressed() -> void:
+	get_tree().quit()
+
+
+func _on_button_pressed() -> void:
+	_goto_game_scene()
+	
+
+func _goto_game_scene() -> void:
+	# 这里是id存的；
+	var _scene_id:String = Game.data.scene_navigation.persistent_scene_id
+	var _scene_path:String = "res://scenes/maps/%s.tscn" % _scene_id
+	_scene_path = "res://scenes/test/test_ecs.tscn"
+	Game.change_game_scene(_scene_path,{})

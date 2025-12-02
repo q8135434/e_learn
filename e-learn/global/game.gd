@@ -6,14 +6,41 @@ const SHARED_CIRCLE_108 = preload("uid://cgqk4mwv7hg0i")
 
 # 默认系统注册配置
 var system_registrations: Array = [
-	# 核心系统
-	#{
-		#"script": load("res://core/ecs/systems/infrastructure/touch_input_system.gd"),
-		#"group": "infrastructure",
-		#"name": "TouchInputSystem ",
-		#"needs_scene_tree": true,  # 🎯 需要场景树来处理输入事件
-		#"priority": 1  # 🎯 最高优先级
-	#},
+	 {
+		"script": load("res://core/ecs/systems/infrastructure/touch_input_system.gd"),
+		"group": "infrastructure",
+		"name": "TouchInputSystem",
+		"needs_scene_tree": true, 
+		"priority": 1  # 输入系统优先级最高
+	},
+	{
+		"script": load("res://core/ecs/systems/core/movement_system.gd"),
+		"group": "core",
+		"name": "MovementSystem",
+		"needs_scene_tree": true, 
+		"priority": 10  
+	},
+	{
+		"script": load("res://core/ecs/systems/infrastructure/camera_system.gd"),
+		"group": "infrastructure",
+		"name": "CameraSystem",
+		"needs_scene_tree": true, 
+		"priority": 90  
+	},
+	{
+		"script": load("res://core/ecs/systems/render/health_bar_system.gd"),
+		"group": "infrastructure",
+		"name": "HealthBarSystem",
+		"needs_scene_tree": true, 
+		"priority": 95  
+	},
+	{
+		"script": load("res://core/ecs/systems/render/name_label_system.gd"),
+		"group": "infrastructure",
+		"name": "NameLabelSystem",
+		"needs_scene_tree": true, 
+		"priority": 96 
+	},
 ]
 
 ## 单例 Game

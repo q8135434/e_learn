@@ -6,5 +6,12 @@ func _on_button_2_pressed() -> void:
 
 
 func _on_button_pressed() -> void:
-	var player = EntityFactory.create_player_from_profile(Vector2(300,300),self)
+	_goto_game_scene()
 	
+
+func _goto_game_scene() -> void:
+	# 这里是id存的；
+	var _scene_id:String = Game.data.scene_navigation.persistent_scene_id
+	var _scene_path:String = "res://scenes/maps/%s.tscn" % _scene_id
+	_scene_path = "res://scenes/test/test_ecs.tscn"
+	Game.change_game_scene(_scene_path,{})

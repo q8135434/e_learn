@@ -56,8 +56,8 @@ func get_entity_data() -> EntityData:
 	return data
 	
 # 统一移动接口，子类直接调
-func move(direction: Vector2, speed: float) -> void:
-	velocity = direction * speed
+func move() -> void:
+	data.runtime.position = position
 	move_and_slide()
 
 # 创建碰撞盒
