@@ -57,7 +57,7 @@ var state_flags: int = 0
 var nickname: String = ""
 
 # 战斗模式相关字段
-var battle_mode: int = BattleMode.MANUAL
+var battle_mode: int = BattleMode.ASSIST
 
 # 通用点击目标（所有模式都可用）
 var click_target: Dictionary = {

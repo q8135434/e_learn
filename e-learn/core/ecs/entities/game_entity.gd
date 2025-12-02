@@ -57,8 +57,10 @@ func get_entity_data() -> EntityData:
 	
 # 统一移动接口，子类直接调
 func move() -> void:
-	data.runtime.position = position
+	velocity = data.runtime.velocity
+	
 	move_and_slide()
+	data.runtime.position = position
 
 # 创建碰撞盒
 func _create_collision_shape() -> void:

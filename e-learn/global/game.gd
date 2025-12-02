@@ -14,11 +14,39 @@ var system_registrations: Array = [
 		"priority": 1  # 输入系统优先级最高
 	},
 	{
+		"script": load("res://core/ecs/systems/core/battle_mode_manager.gd"),
+		"group": "core",
+		"name": "BattleModeManager", 
+		"needs_scene_tree": false,
+		"priority": 5
+	},
+	{
+		"script": load("res://core/ecs/systems/core/manual_battle_system.gd"),
+		"group": "core",
+		"name": "ManualBattleSystem",
+		"needs_scene_tree": false, 
+		"priority": 25  
+	},
+	{
+		"script": load("res://core/ecs/systems/core/assist_battle_system.gd"),
+		"group": "core", 
+		"name": "AssistBattleSystem",
+		"needs_scene_tree": false,
+		"priority": 26
+	},
+	{
+		"script": load("res://core/ecs/systems/core/full_auto_battle_system.gd"),
+		"group": "core",
+		"name": "ManualBattleSystem",
+		"needs_scene_tree": false, 
+		"priority": 27
+	},
+	{
 		"script": load("res://core/ecs/systems/core/movement_system.gd"),
 		"group": "core",
 		"name": "MovementSystem",
-		"needs_scene_tree": true, 
-		"priority": 10  
+		"needs_scene_tree": false, 
+		"priority": 30  
 	},
 	{
 		"script": load("res://core/ecs/systems/infrastructure/camera_system.gd"),
@@ -40,6 +68,13 @@ var system_registrations: Array = [
 		"name": "NameLabelSystem",
 		"needs_scene_tree": true, 
 		"priority": 96 
+	},
+	{
+		"script": load("res://core/ecs/systems/render/damage_text_system.gd"),
+		"group": "infrastructure",
+		"name": "DamageTextSystem",
+		"needs_scene_tree": true, 
+		"priority": 97 
 	},
 ]
 
